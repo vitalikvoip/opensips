@@ -510,6 +510,23 @@ static struct tcp_connection* _tcpconn_find(int id)
 	return 0;
 }
 
+static struct tcp_connection* _tcpconn_find_all(int id)
+{
+	struct tcp_connection *c;
+	unsigned hash;
+
+	if (id){
+		hash=tcp_id_hash(id);
+		for (c=TCP_PART(id).tcpconn_id_hash[hash]; c; c=c->id_next){
+#ifdef EXTRA_DEBUG
+			LM_DBG("c=%p, c->id=%d, port=%d\n",c, c->id, c->rcv.src_port);
+			print_ip("ip=", &c->rcv.src_ip, "\n");
+#endif
+			if ((id==c->id)) return c;
+		}
+	}
+	return 0;
+}
 
 /* returns the correlation ID of a TCP connection */
 int tcp_get_correlation_id( int id, unsigned long long *cid)
@@ -527,6 +544,30 @@ int tcp_get_correlation_id( int id, unsigned long long *cid)
 	return -1;
 }
 
+int tcp_conn_get_by_id(int id, struct tcp_connection** conn)
+{
+	struct tcp_connection* c;
+	int part;
+
+	if (id) {
+		part = id;
+		TCPCONN_LOCK(part);
+		if ( (c=_tcpconn_find_all(part))!=NULL ) {
+			goto found;
+		}
+		TCPCONN_UNLOCK(part);
+	}
+
+	/* not found */
+	*conn = NULL;
+	return 0;
+
+found:
+	c->refcnt++;
+	TCPCONN_UNLOCK(part);
+	*conn = c;
+	return 1;
+}
 
 /*! \brief _tcpconn_find with locks and acquire fd */
 int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
@@ -544,8 +585,9 @@ int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
 	if (id) {
 		part = id;
 		TCPCONN_LOCK(part);
-		if ( (c=_tcpconn_find(part))!=NULL )
+		if ( (c=_tcpconn_find(part))!=NULL ) {
 			goto found;
+		}
 		TCPCONN_UNLOCK(part);
 	}
 
@@ -857,8 +899,8 @@ static struct tcp_connection* tcpconn_new(int sock, union sockaddr_union* su,
 	c->rcv.dst_ip = si->address;
 	c->rcv.dst_port = si->port_no;
 	print_ip("tcpconn_new: new tcp connection to: ", &c->rcv.src_ip, "\n");
-	LM_DBG("on port %d, proto %d\n", c->rcv.src_port, si->proto);
 	c->id=(*connection_id)++;
+	LM_DBG("on port %d, proto %d, conn_id %d\n", c->rcv.src_port, si->proto, c->id);
 	c->cid = (unsigned long long)c->id
 				| ( (unsigned long long)(startup_time&0xFFFFFF) << 32 )
 					| ( (unsigned long long)(rand()&0xFF) << 56 );
