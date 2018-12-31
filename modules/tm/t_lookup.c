@@ -288,6 +288,19 @@ static inline int via_matching( struct via_body *inv_via,
 	return 1;
 }
 
+static inline int via_matching_cancel(struct via_body *inv_via,
+		struct via_body *ack_via)
+{
+	if (inv_via->tid.len!=ack_via->tid.len)
+		return 0;
+	if (memcmp(inv_via->tid.s, ack_via->tid.s,
+				ack_via->tid.len)!=0)
+		return 0;
+	if (via1_matching)
+		return via_matching(inv_via,ack_via);
+	else
+		return 1;
+}
 
 /* transaction matching a-la RFC-3261 using transaction ID in branch
    (the function assumes there is magic cookie in branch)
@@ -304,6 +317,7 @@ static int matching_3261( struct sip_msg *p_msg, struct cell **trans,
 	struct sip_msg  *t_msg;
 	struct via_body *via1;
 	int is_ack;
+	int is_cancel;
 	int dlg_parsed;
 	int ret = 0;
 	struct cell *e2e_ack_trans;
@@ -311,6 +325,7 @@ static int matching_3261( struct sip_msg *p_msg, struct cell **trans,
 	e2e_ack_trans=0;
 	via1=p_msg->via1;
 	is_ack=p_msg->REQ_METHOD==METHOD_ACK;
+	is_cancel=p_msg->REQ_METHOD==METHOD_CANCEL;
 	dlg_parsed=0;
 	/* update parsed tid */
 	via1->tid.s=via1->branch->value.s+MCOOKIE_LEN;
@@ -360,8 +375,12 @@ static int matching_3261( struct sip_msg *p_msg, struct cell **trans,
 		}
 		/* now real tid matching occurs  for negative ACKs and any
 	 	 * other requests */
-		if (!via_matching(t_msg->via1 /* inv via */, via1 /* ack */ ))
+		if (is_cancel) {
+			if (!via_matching_cancel(t_msg->via1, via1))
+				continue;
+		} else if (!via_matching(t_msg->via1 /* inv via */, via1 /* ack */ ))
 			continue;
+
 		/* all matched -- we found the transaction ! */
 		LM_DBG("RFC3261 transaction matched, tid=%.*s\n",
 			via1->tid.len, via1->tid.s);
