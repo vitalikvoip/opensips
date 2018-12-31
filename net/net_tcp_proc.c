@@ -239,6 +239,7 @@ again:
 			if (event_type & IO_WATCH_READ) {
 				con=(struct tcp_connection*)fm->data;
 				resp = protos[con->type].net.read( (void*)con, &ret );
+				LM_DBG("net.read resp => %d\n", (int)resp);
 				if (resp<0) {
 					ret=-1; /* some error occurred */
 					con->state=S_CONN_BAD;
