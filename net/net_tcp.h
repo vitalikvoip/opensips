@@ -85,6 +85,8 @@ int tcp_connect_blocking_timeout(int s, const struct sockaddr *servaddr,
 int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
 		struct tcp_connection** conn, int* conn_fd);
 
+int tcp_conn_get_by_id(int id, struct tcp_connection** conn);
+
 /* creates a new tcp conn around a newly connected socket
  * and sends it to the master */
 struct tcp_connection* tcp_conn_create(int sock, union sockaddr_union* su,
