@@ -104,6 +104,14 @@ static int tls_crlf_pingpong = 1;
 /* 0: do not drop single CRLF messages */
 static int tls_crlf_drop = 0;
 
+static event_id_t   ei_tls_close_id    = EVI_ERROR;
+static str          ei_close_name    = str_init("E_TLS_CLOSE");
+static str          ei_host_name     = str_init("peer_host");
+static str          ei_port_name     = str_init("peer_port");
+static evi_params_p ei_tls_close_params   = NULL;
+static evi_param_p  ei_tls_peerhost_param = NULL;
+static evi_param_p  ei_tls_peerport_param = NULL;
+
 static int  mod_init(void);
 static void mod_destroy(void);
 static int proto_tls_init(struct proto_info *pi);
@@ -113,7 +121,7 @@ static int proto_tls_send(struct socket_info* send_sock,
 static void tls_report(int type, unsigned long long conn_id, int conn_flags,
 		void *extra);
 static struct mi_root* tls_trace_mi(struct mi_root* cmd, void* param );
-
+static int tls_event_init(void);
 
 trace_dest t_dst;
 
@@ -249,6 +257,11 @@ static int mod_init(void)
 			get_script_route_ID_by_name( trace_filter_route, rlist, RT_NO);
 	}
 
+	if (tls_event_init() < 0) {
+		LM_ERR("Failed to init tcp event\n");
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -286,7 +299,40 @@ static int proto_tls_init(struct proto_info *pi)
 	return 0;
 }
 
+static int tls_event_init(void) {
+	int rc = -1;
 
+	do {
+		ei_tls_close_id = evi_publish_event(ei_close_name);
+		if (ei_tls_close_id == EVI_ERROR) {
+			LM_ERR("cannot register tls close event\n");
+			break;
+		}
+
+		ei_tls_close_params = pkg_malloc(sizeof(evi_params_t));
+		if (!ei_tls_close_params) {
+			LM_ERR("no more pkg memory\n");
+			break;
+		}
+		memset(ei_tls_close_params, 0, sizeof(evi_params_t));
+
+		ei_tls_peerhost_param = evi_param_create(ei_tls_close_params,&ei_host_name);
+		if (!ei_tls_peerhost_param) {
+			LM_ERR("cannot create tls peer host parameter\n");
+			break;
+		}
+
+		ei_tls_peerport_param = evi_param_create(ei_tls_close_params,&ei_port_name);
+		if (!ei_tls_peerhost_param) {
+			LM_ERR("cannot create tls peer port parameter\n");
+			break;
+		}
+
+		rc = 0;
+	} while(0);
+
+	return rc;
+}
 
 static int proto_tls_init_listener(struct socket_info *si)
 {
@@ -357,16 +403,54 @@ static void tls_report(int type, unsigned long long conn_id, int conn_flags,
 																void *extra)
 {
 	str s;
+	struct tcp_connection *c = NULL;
+	str  peer_host = STR_NULL;
+	int  peer_port = 0;
+	char buf[IP_ADDR_MAX_STR_SIZE];
 
 	if (type==TCP_REPORT_CLOSE) {
-		if ( !*trace_is_on || !t_dst || (conn_flags & F_CONN_TRACE_DROPPED) )
-			return;
 
 		/* grab reason text */
 		if (extra) {
 			s.s = (char*)extra;
 			s.len = strlen (s.s);
 		}
+
+		LM_DBG("Report for conn_id => %d, reason => %.*s", (int)conn_id,s.len,s.s);
+
+		if (ei_tls_close_id != EVI_ERROR) {
+			do {
+				tcp_conn_get_by_id(conn_id, &c);
+				if (!c) {
+					LM_ERR("connection [%d] not found\n", (int)conn_id);
+					break;
+				}
+
+				snprintf(buf,sizeof(buf),"%s",ip_addr2a(&c->rcv.src_ip));
+				peer_host.s = buf;
+				peer_host.len = strlen(buf);
+
+				peer_port = c->rcv.src_port;
+
+				tcp_conn_release(c, 0);
+
+				if (evi_param_set_str(ei_tls_peerhost_param, &peer_host) < 0) {
+					LM_ERR("cannot set tcp_peerhost param\n");
+					break;
+				}
+
+				if (evi_param_set_int(ei_tls_peerport_param, &peer_port) < 0) {
+					LM_ERR("cannot set tcp_peerport param\n");
+					break;
+				}
+
+				if (evi_raise_event(ei_tls_close_id, ei_tls_close_params) < 0)
+					LM_ERR("cannot raise an event %.*s\n", ei_close_name.len, ei_close_name.s);
+			} while(0);
+		}
+
+		if ( !*trace_is_on || !t_dst || (conn_flags & F_CONN_TRACE_DROPPED) )
+			return;
 
 		trace_message_atonce( PROTO_TLS, conn_id, NULL/*src*/, NULL/*dst*/,
 			TRANS_TRACE_CLOSED, TRANS_TRACE_SUCCESS, extra?&s:NULL, t_dst );
