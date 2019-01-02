@@ -373,7 +373,7 @@ static evi_reply_sock* ebr_parse(str socket)
 		return NULL;
 	}
 
-	LM_ERR("parsing socket <%.*s>\n",socket.len,socket.s);
+	LM_DBG("parsing socket <%.*s>\n",socket.len,socket.s);
 
 	/* search the EBR event based on name */
 	ev = search_ebr_event( &socket );
