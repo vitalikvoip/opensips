@@ -351,12 +351,9 @@ int notify_ebr_subscriptions( ebr_event *ev, evi_params_t *params)
 	int matches;
 	char *s;
 	struct usr_avp *avps=(void*)-1;
-	unsigned int my_time;
 
 	LM_DBG("notification received for event %.*s, checking subscriptions\n",
 		ev->event_name.len, ev->event_name.s);
-
-	my_time = get_ticks();
 
 	lock_get( &(ev->lock) );
 
