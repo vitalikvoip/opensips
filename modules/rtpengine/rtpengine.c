@@ -1760,6 +1760,8 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 			goto error;
 		}
 		bencode_dictionary_add_str(ng_flags.dict, "sdp", &body);
+	} else if (op == OP_DELETE) {
+		ng_flags.flags = bencode_list(bencbuf);
 	}
 
 	/*** parse flags & build dictionary ***/
