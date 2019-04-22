@@ -370,8 +370,14 @@ static int send2child(struct tcp_connection* tcpconn,int rw)
 		}
 	}
 
+	// FIXME
+	idx = rand() % tcp_children_no;
+
 	tcp_children[idx].busy++;
 	tcp_children[idx].n_reqs++;
+
+	LM_DBG("Send2Child Conn: {%p} Child: {%d - %p} Busy: {%d}", tcpconn, idx, &tcp_children[idx], tcp_children[idx].busy);
+
 	if (min_busy) {
 		LM_DBG("no free tcp receiver, connection passed to the least "
 		       "busy one (proc #%d, %d con)\n", idx, min_busy);
@@ -1302,6 +1308,14 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 	switch(cmd){
 		case CONN_RELEASE:
 			tcp_c->busy--;
+
+			{
+			char *bug_str = "";
+			if (tcp_c->busy <= 0)
+				bug_str = "BUG!!!!";
+			LM_DBG("%s CONN_RELEASE Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+			}
+
 			if (tcpconn->state==S_CONN_BAD){
 				sh_log(tcpconn->hist, TCP_UNREF, "tcpworker release bad, (%d)", tcpconn->refcnt);
 				tcpconn_destroy(tcpconn);
@@ -1315,6 +1329,14 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 			break;
 		case CONN_RELEASE_WRITE:
 			tcp_c->busy--;
+
+			{
+			char *bug_str = "";
+			if (tcp_c->busy <= 0)
+				bug_str = "BUG!!!!";
+			LM_DBG("%s CONN_RELEASE_WRITE Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+			}
+
 			if (tcpconn->state==S_CONN_BAD){
 				sh_log(tcpconn->hist, TCP_UNREF, "tcpworker release write bad, (%d)", tcpconn->refcnt);
 				tcpconn_destroy(tcpconn);
@@ -1325,6 +1347,14 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 			break;
 		case ASYNC_WRITE:
 			tcp_c->busy--;
+
+			{
+			char *bug_str = "";
+			if (tcp_c->busy <= 0)
+				bug_str = "BUG!!!!";
+			LM_DBG("%s ASYNC_WRITE Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+			}
+
 			if (tcpconn->state==S_CONN_BAD){
 				sh_log(tcpconn->hist, TCP_UNREF, "tcpworker async write bad, (%d)", tcpconn->refcnt);
 				tcpconn_destroy(tcpconn);
@@ -1341,6 +1371,14 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 		case CONN_EOF:
 			/* WARNING: this will auto-dec. refcnt! */
 			tcp_c->busy--;
+
+			{
+			char *bug_str = "";
+			if (tcp_c->busy <= 0)
+				bug_str = "BUG!!!!";
+			LM_DBG("%s CONN_EOF Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+			}
+
 			if ((tcpconn->flags & F_CONN_REMOVED) != F_CONN_REMOVED &&
 				(tcpconn->s!=-1)){
 				reactor_del_all( tcpconn->s, -1, IO_FD_CLOSING);
