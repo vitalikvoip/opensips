@@ -98,6 +98,7 @@ void tcp_conn_release(struct tcp_connection* c, int pending_data)
 		return;
 	}
 	if (pending_data) {
+		LM_DBG("SENDING ASYNC_WRITE \n");
 		tcpconn_release(c, ASYNC_WRITE2,1);
 		return;
 	}
@@ -177,6 +178,7 @@ again:
 
 			LM_DBG("We have received conn %p with rw %d on fd %d\n",con,rw,s);
 			if (rw & IO_WATCH_READ) {
+				LM_DBG("Received con for async read %p ref = %d\n",con,con->refcnt);
 				if (tcpconn_list_find(con, tcp_conn_lst)) {
 					LM_CRIT("duplicate connection received: %p, id %d, fd %d, "
 					        "refcnt %d state %d (n=%d)\n", con, con->id,
@@ -224,10 +226,12 @@ again:
 				} else if (resp==1) {
 					sh_log(con->hist, TCP_SEND2MAIN, "handle write, async, state: %d, att: %d",
 					       con->state, con->msg_attempts);
+					LM_DBG("Asking for ASYNC_WRITE \n");
 					tcpconn_release(con, ASYNC_WRITE,1);
 				} else {
 					sh_log(con->hist, TCP_SEND2MAIN, "handle write, ok, state: %d, att: %d",
 					       con->state, con->msg_attempts);
+					LM_DBG("Sending CONN_RELEASE_WRITE wrote %d bytes\n", (int)resp);
 					tcpconn_release(con, CONN_RELEASE_WRITE,1);
 				}
 				ret = 0;
