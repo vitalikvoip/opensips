@@ -631,6 +631,10 @@ send_it:
 	/* mark the ID of the used connection (tracing purposes) */
 	last_outgoing_tcp_id = c->id;
 
+	if (n<len) {
+		LM_DBG("sending ASYNC_WRITE to TCP MAIN\n");
+	}
+
 	tcp_conn_release(c, (n<len)?1:0/*pending data in async mode?*/ );
 	return n;
 }

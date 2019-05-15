@@ -348,7 +348,106 @@ int tcp_connect_blocking(int fd, const struct sockaddr *servaddr,
 			tcp_connect_timeout);
 }
 
+#ifdef CONN_COUNTER_DEBUG
+typedef struct conn_counter {
+	void *conn;
+	int counter;
+	struct conn_counter *next;
+	struct conn_counter *prev;
+} counter_t;
 
+counter_t *counter_list;
+
+void counter_add(void *conn) {
+	if (!counter_list) {
+		counter_list = (counter_t*)pkg_malloc(sizeof(counter_t));
+		memset(counter_list,0,sizeof(*counter_list));
+
+		counter_list->conn = conn;
+		counter_list->counter++;
+	} else {
+		int found=0;
+		counter_t *ptr = counter_list;
+		while(ptr) {
+			if (ptr->conn == conn) {
+				ptr->counter++;
+				found++;
+				LM_DBG("Connection %p found, counter increased to %d\n", conn, ptr->counter);
+				break;
+			}
+			ptr = ptr->next;
+		}
+
+		if (!found) {
+			counter_t *new = (counter_t*)pkg_malloc(sizeof(counter_t));
+			memset(new,0,sizeof(*new));
+
+			LM_DBG("New connection %p inserted\n", conn);
+			new->conn = conn;
+			new->counter++;
+			new->next = counter_list;
+			counter_list->prev = new;
+			counter_list = new;
+		}
+	}
+}
+
+void counter_del(void *conn) {
+	if (!counter_list) {
+		LM_DBG("NO COUNTER FOUND, can delete %p\n", conn);
+		return;
+	}
+
+	int found=0;
+	counter_t *ptr = counter_list;
+	while (ptr) {
+		if (ptr->conn == conn) {
+			ptr->counter--;
+
+			LM_DBG("OK, Connection %p removed, counter %d\n", conn, ptr->counter);
+
+			if (!ptr->counter) {
+
+				if (counter_list == ptr) {
+					// ptr points to the head node
+					counter_list = ptr->next;
+
+					// there were more nodes, fix prev
+					if (counter_list)
+						counter_list->prev = NULL;
+				} else {
+					// ptr points to the middle or tail
+
+					// ptr is in the middle, prev != NULL
+					ptr->prev->next = ptr->next;
+
+					if (ptr->next) {
+						// ptr is not in the tail
+						ptr->next->prev = ptr->prev;
+					}
+				}
+				pkg_free(ptr);
+				ptr = NULL;
+			}
+
+			found++;
+			break;
+		}
+		ptr = ptr->next;
+	}
+
+	if (!found) {
+		LM_ERR("BUG !!! Can't remove, No counter found for %p\n", conn);
+	}
+}
+#else
+void counter_add(void *conn) {
+	return;
+}
+void counter_del(void *conn) {
+	return;
+}
+#endif
 
 static int send2child(struct tcp_connection* tcpconn,int rw)
 {
@@ -370,13 +469,12 @@ static int send2child(struct tcp_connection* tcpconn,int rw)
 		}
 	}
 
-	// FIXME
-	idx = rand() % tcp_children_no;
-
 	tcp_children[idx].busy++;
 	tcp_children[idx].n_reqs++;
 
-	LM_DBG("Send2Child Conn: {%p} Child: {%d - %p} Busy: {%d}", tcpconn, idx, &tcp_children[idx], tcp_children[idx].busy);
+	LM_DBG("Send2Child Conn: {%p} Child: {%d - %d} Busy: {%d}", tcpconn, idx, (int)tcp_children[idx].pid, tcp_children[idx].busy);
+
+	counter_add((void*)tcpconn);
 
 	if (min_busy) {
 		LM_DBG("no free tcp receiver, connection passed to the least "
@@ -1265,12 +1363,13 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 	switch(cmd){
 		case CONN_RELEASE:
 			tcp_c->busy--;
+			counter_del((void*)tcpconn);
 
 			{
-			char *bug_str = "";
-			if (tcp_c->busy <= 0)
-				bug_str = "BUG!!!!";
-			LM_DBG("%s CONN_RELEASE Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+				char *bug_str = "";
+				if (tcp_c->busy < 0)
+					bug_str = "BUG!!!!";
+				LM_DBG("%s CONN_RELEASE Conn: {%p} Child: {%d <-> %d} Busy: {%d}", bug_str,tcpconn,(int)(tcp_c-&tcp_children[0]),(int)tcp_c->pid,tcp_c->busy);
 			}
 
 			if (tcpconn->state==S_CONN_BAD){
@@ -1286,12 +1385,13 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 			break;
 		case CONN_RELEASE_WRITE:
 			tcp_c->busy--;
+			counter_del((void*)tcpconn);
 
 			{
-			char *bug_str = "";
-			if (tcp_c->busy <= 0)
-				bug_str = "BUG!!!!";
-			LM_DBG("%s CONN_RELEASE_WRITE Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+				char *bug_str = "";
+				if (tcp_c->busy < 0)
+					bug_str = "BUG!!!!";
+				LM_DBG("%s CONN_RELEASE_WRITE Conn: {%p} Child: {%d <-> %d} Busy: {%d}", bug_str,tcpconn,(int)(tcp_c-&tcp_children[0]),(int)tcp_c->pid,tcp_c->busy);
 			}
 
 			if (tcpconn->state==S_CONN_BAD){
@@ -1304,12 +1404,14 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 			break;
 		case ASYNC_WRITE:
 			tcp_c->busy--;
-
+			counter_del((void*)tcpconn);
+			/* fall through*/
+		case ASYNC_WRITE2:
 			{
-			char *bug_str = "";
-			if (tcp_c->busy <= 0)
-				bug_str = "BUG!!!!";
-			LM_DBG("%s ASYNC_WRITE Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+				char *bug_str = "";
+				if (tcp_c->busy < 0)
+					bug_str = "BUG!!!!";
+				LM_DBG("%s ASYNC_WRITE (%d) Conn: {%p} Child: {%d <-> %d} Busy: {%d}", bug_str, cmd,tcpconn,(int)(tcp_c-&tcp_children[0]),(int)tcp_c->pid,tcp_c->busy);
 			}
 
 			if (tcpconn->state==S_CONN_BAD){
@@ -1328,12 +1430,14 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 		case CONN_EOF:
 			/* WARNING: this will auto-dec. refcnt! */
 			tcp_c->busy--;
-
+			counter_del((void*)tcpconn);
+			/* fall through*/
+		case CONN_ERROR2:
 			{
-			char *bug_str = "";
-			if (tcp_c->busy <= 0)
-				bug_str = "BUG!!!!";
-			LM_DBG("%s CONN_EOF Conn: {%p} Child: {%p} Busy: {%d}", bug_str,tcpconn,tcp_c,tcp_c->busy);
+				char *bug_str = "";
+				if (tcp_c->busy < 0)
+					bug_str = "BUG!!!!";
+				LM_DBG("%s CONN_EOF (cmd -> %d) Conn: {%p} Child: {%d <-> %d} Busy: {%d}", bug_str, cmd, tcpconn,(int)(tcp_c-&tcp_children[0]),(int)tcp_c->pid,tcp_c->busy);
 			}
 
 			if ((tcpconn->flags & F_CONN_REMOVED) != F_CONN_REMOVED &&
