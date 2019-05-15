@@ -510,24 +510,6 @@ static struct tcp_connection* _tcpconn_find(int id)
 	return 0;
 }
 
-static struct tcp_connection* _tcpconn_find_all(int id)
-{
-	struct tcp_connection *c;
-	unsigned hash;
-
-	if (id){
-		hash=tcp_id_hash(id);
-		for (c=TCP_PART(id).tcpconn_id_hash[hash]; c; c=c->id_next){
-#ifdef EXTRA_DEBUG
-			LM_DBG("c=%p, c->id=%d, port=%d\n",c, c->id, c->rcv.src_port);
-			print_ip("ip=", &c->rcv.src_ip, "\n");
-#endif
-			if ((id==c->id)) return c;
-		}
-	}
-	return 0;
-}
-
 /* returns the correlation ID of a TCP connection */
 int tcp_get_correlation_id( int id, unsigned long long *cid)
 {
@@ -542,31 +524,6 @@ int tcp_get_correlation_id( int id, unsigned long long *cid)
 	*cid = 0;
 	TCPCONN_UNLOCK(id);
 	return -1;
-}
-
-int tcp_conn_get_by_id(int id, struct tcp_connection** conn)
-{
-	struct tcp_connection* c;
-	int part;
-
-	if (id) {
-		part = id;
-		TCPCONN_LOCK(part);
-		if ( (c=_tcpconn_find_all(part))!=NULL ) {
-			goto found;
-		}
-		TCPCONN_UNLOCK(part);
-	}
-
-	/* not found */
-	*conn = NULL;
-	return 0;
-
-found:
-	c->refcnt++;
-	TCPCONN_UNLOCK(part);
-	*conn = c;
-	return 1;
 }
 
 /*! \brief _tcpconn_find with locks and acquire fd */

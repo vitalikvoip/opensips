@@ -71,7 +71,7 @@ static int tcp_read_req(struct tcp_connection* con, int* bytes_read);
 static int tcp_conn_init(struct tcp_connection* c);
 static void tcp_conn_clean(struct tcp_connection* c);
 static void tcp_report(int type, unsigned long long conn_id, int conn_flags,
-		void *extra);
+		void *extra,struct peer_endpoint peer);
 static struct mi_root* tcp_trace_mi(struct mi_root* cmd, void* param );
 
 #define TRACE_PROTO "proto_hep"
@@ -410,10 +410,9 @@ again:
 
 
 static void tcp_report(int type, unsigned long long conn_id, int conn_flags,
-																void *extra)
+						void *extra, struct peer_endpoint peer)
 {
 	str s;
-	struct tcp_connection *c = NULL;
 	str  peer_host = STR_NULL;
 	int  peer_port = 0;
 	char buf[IP_ADDR_MAX_STR_SIZE];
@@ -425,23 +424,15 @@ static void tcp_report(int type, unsigned long long conn_id, int conn_flags,
 			s.len = strlen (s.s);
 		}
 
-		LM_DBG("Report for conn_id => %d, reason => %.*s", (int)conn_id,s.len,s.s);
-
 		if (ei_tcp_close_id != EVI_ERROR) {
 			do {
-				tcp_conn_get_by_id(conn_id, &c);
-				if (!c) {
-					LM_ERR("connection [%d] not found\n", (int)conn_id);
-					break;
-				}
-
-				snprintf(buf,sizeof(buf),"%s",ip_addr2a(&c->rcv.src_ip));
-				peer_host.s = buf;
+				snprintf(buf,sizeof(buf),"%s",ip_addr2a(&peer.addr));
+				peer_host.s   = buf;
 				peer_host.len = strlen(buf);
+				peer_port     = peer.port;
 
-				peer_port = c->rcv.src_port;
-
-				tcp_conn_release(c, 0);
+				LM_DBG("Report for conn_id => %d, peer => %.*s:%d, reason => %.*s",
+						(int)conn_id,peer_host.len,peer_host.s,peer_port,s.len,s.s);
 
 				if (evi_param_set_str(ei_tcp_peerhost_param, &peer_host) < 0) {
 					LM_ERR("cannot set tcp_peerhost param\n");
@@ -453,8 +444,10 @@ static void tcp_report(int type, unsigned long long conn_id, int conn_flags,
 					break;
 				}
 
-				if (evi_raise_event(ei_tcp_close_id, ei_tcp_close_params) < 0)
+				if (evi_raise_event(ei_tcp_close_id, ei_tcp_close_params) < 0) {
 					LM_ERR("cannot raise an event %.*s\n", ei_close_name.len, ei_close_name.s);
+					break;
+				}
 			} while(0);
 		}
 
