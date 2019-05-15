@@ -1042,6 +1042,10 @@ send_it:
 	send_sock->last_local_real_port = c->rcv.dst_port;
 	send_sock->last_remote_real_port = c->rcv.src_port;
 
+	if (n<len) {
+		LM_DBG("sending ASYNC_WRITE to TCP MAIN\n");
+	}
+
 	sh_log(c->hist, TCP_SEND2MAIN, "send 6, (%d, async: %d)", c->refcnt, n < len);
 	tcp_conn_release(c, (n<len)?1:0/*pending data in async mode?*/ );
 	return n;
