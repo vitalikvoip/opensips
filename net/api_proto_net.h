@@ -32,13 +32,17 @@
 #define PROTO_NET_USE_TCP	(1<<0) /* set by proto's that are based on TCP */
 #define PROTO_NET_USE_UDP	(1<<1) /* set by proto's that are based on UDP */
 
+struct peer_endpoint {
+	struct ip_addr addr;
+	unsigned short port;
+};
 
 typedef int (*proto_net_write_f)(void *src, int fd);
 typedef int (*proto_net_read_f)(void *src, int *len);
 typedef int (*proto_net_conn_init_f)(struct tcp_connection *c);
 typedef void (*proto_net_conn_clean_f)(struct tcp_connection *c);
 typedef void (*proto_net_report_f)( int type, unsigned long long conn_id,
-		int conn_flags, void *extra);
+		int conn_flags, void *extra, struct peer_endpoint peer);
 
 struct api_proto_net {
 	int						flags;

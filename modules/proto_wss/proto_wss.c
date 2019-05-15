@@ -107,7 +107,7 @@ static int wss_read_req(struct tcp_connection* con, int* bytes_read);
 static int wss_conn_init(struct tcp_connection* c);
 static void ws_conn_clean(struct tcp_connection* c);
 static void wss_report(int type, unsigned long long conn_id, int conn_flags,
-		void *extra);
+		void *extra, struct peer_endpoint peer);
 static struct mi_root* wss_trace_mi(struct mi_root* cmd, void* param );
 
 
@@ -310,7 +310,7 @@ static int proto_wss_init_listener(struct socket_info *si)
 }
 
 static void wss_report(int type, unsigned long long conn_id, int conn_flags,
-																void *extra)
+						void *extra, struct peer_endpoint peer)
 {
 	str s;
 
