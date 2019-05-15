@@ -38,6 +38,8 @@ typedef struct _tcp_report_job {
 	int proto;
 	/* extra data */
 	void *extra;
+	/* peer endpoint ip:port */
+	struct peer_endpoint peer;
 } tcp_report_job;
 
 
@@ -47,7 +49,7 @@ static void tcp_report_ipc_handler(int sender, void *param)
 
 	/* run the report callback  */
 	protos[job->proto].net.report( job->type, job->conn_id, job->conn_flags,
-		job->extra);
+		job->extra,job->peer);
 	/* and free the job memory */
 	shm_free(job);
 }
@@ -92,6 +94,11 @@ void tcp_trigger_report(struct tcp_connection *conn, int type, void *extra)
 		return;
 	}
 
+	struct peer_endpoint peer = {
+			.addr = conn->rcv.src_ip,
+			.port = conn->rcv.src_port,
+	};
+
 	/* now, trigger the "report" callback from the PROTO layer */
 	if (is_tcp_main) {
 
@@ -108,6 +115,7 @@ void tcp_trigger_report(struct tcp_connection *conn, int type, void *extra)
 		job->conn_flags = conn->flags;
 		job->proto = conn->type;
 		job->extra = extra;
+		job->peer = peer;
 		/* ...sending it to the last TCP worker for now
 		 * The last TCP worker is the prev,prev to TCP MAIN */
 		if (ipc_dispatch_rpc( tcp_report_ipc_handler, job)<0) {
@@ -122,7 +130,7 @@ void tcp_trigger_report(struct tcp_connection *conn, int type, void *extra)
 		/* do the reporting inline */
 
 		/* run the report callback  */
-		protos[conn->type].net.report( type, conn->cid, conn->flags, extra);
+		protos[conn->type].net.report( type, conn->cid, conn->flags, extra, peer);
 
 	}
 
