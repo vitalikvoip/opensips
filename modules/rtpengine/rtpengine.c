@@ -1473,7 +1473,7 @@ static int parse_flags(struct ng_flags_parse *ng_flags, struct sip_msg *msg,
 					if (!val.s)
 						goto error;
 					err = "invalid value";
-					if (str_eq(&val, "force") || str_eq(&val, "relay") || str_eq(&val, "force-relay") || str_eq(&val, "remove"))
+					if (str_eq(&val, "force") || str_eq(&val, "relay") || str_eq(&val, "force-relay") || str_eq(&val, "remove") || str_eq(&val, "ignore"))
 						BCHECK(bencode_dictionary_add_str(ng_flags->dict, "ICE", &val));
 					else
 						goto error;
