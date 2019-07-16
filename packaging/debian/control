@@ -84,7 +84,8 @@ Suggests: opensips-b2bua-module,
           opensips-tlsmgm-module,
           opensips-unixodbc-module,
           opensips-xmlrpc-module,
-          opensips-xmpp-module
+          opensips-xmpp-module,
+          opensips-ifctools-module
 Description: very fast and configurable SIP server
  OpenSIPS is a very fast and flexible SIP (RFC3261)
  server. Written entirely in C, OpenSIPS can handle thousands calls
@@ -648,3 +649,10 @@ Description: Python scripting support
  per second even on low-budget hardware.
  .
  This module provides a Python interface to implement your scripting logic.
+
+Package: opensips-ifctools-module
+Architecture: any
+Multi-Arch: same
+Depends: opensips (= ${binary:Version}), ${misc:Depends}, ${shlibs:Depends}
+Description: InFocus tools
+
