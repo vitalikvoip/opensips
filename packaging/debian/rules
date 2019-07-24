@@ -211,8 +211,8 @@ PYTHON_PKGNAME = opensips-python-module
 PYTHON_MODULE = python
 PYTHON_MOD_PATH=$(addprefix modules/, $(PYTHON_MODULE))
 IFCTOOLS_PKGNAME = opensips-ifctools-module
-IFCTOOLS_MODULE = ifctools
-IFCTOOLS_MOD_PATH=$(addprefix modules/, $(IFCTOOLS_MODULE))
+IFCTOOLS_MODULES = ifctools
+IFCTOOLS_MOD_PATH=$(addprefix modules/, $(IFCTOOLS_MODULES))
 
 # Need this per-package variables available in environment so accessible
 # to shell. Since have underscore in them, need to explicitly export
