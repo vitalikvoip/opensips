@@ -91,7 +91,7 @@ static int pv_get_sendsock_helper(struct sip_msg* msg,  pv_param_t* pvp, pv_valu
 	if (msg->first_line.type == SIP_REQUEST) {
 		LM_DBG("Processing request to %.*s\n", (GET_NEXT_HOP(msg))->len, (GET_NEXT_HOP(msg))->s);
 
-		send_sock = uri2sock(msg,GET_NEXT_HOP(msg),&to_su,PROTO_NONE);
+		send_sock = uri2sock(msg,GET_NEXT_HOP(msg),&to_su,PROTO_UDP);
 		if (!send_sock) {
 			LM_ERR("uri2sock failed for uri: %.*s\n", (GET_NEXT_HOP(msg))->len, (GET_NEXT_HOP(msg))->s);
 			goto error;
