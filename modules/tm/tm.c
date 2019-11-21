@@ -126,6 +126,7 @@ static int t_flush_flags(struct sip_msg* msg);
 static int t_local_replied(struct sip_msg* msg, char *type);
 static int t_check_trans(struct sip_msg* msg);
 static int t_was_cancelled(struct sip_msg* msg);
+static int t_was_cancelled_ident(unsigned int hash_index, unsigned int label);
 static int w_t_cancel_branch(struct sip_msg* msg, char *sflags );
 static int w_t_add_hdrs(struct sip_msg* msg, char *val );
 static int t_cancel_trans(struct cell *t, str *hdrs);
@@ -715,6 +716,7 @@ int load_tm( struct tm_binds *tmb)
 	tmb->t_check_trans = (cmd_function)t_check_trans;
 	tmb->t_get_trans_ident = t_get_trans_ident;
 	tmb->t_lookup_ident = t_lookup_ident;
+	tmb->t_was_cancelled_ident = t_was_cancelled_ident;
 	tmb->t_gett = get_t;
 	tmb->t_get_e2eackt = get_e2eack_t;
 	tmb->t_get_picked = t_get_picked_branch;
@@ -1146,6 +1148,22 @@ static int t_local_replied(struct sip_msg* msg, char *type)
 	}
 }
 
+static int t_was_cancelled_ident(unsigned int hash_index, unsigned int label)
+{
+	struct cell *t;
+	int rc = -1;
+
+	if (t_lookup_ident(&t,hash_index,label)<0) {
+		LM_DBG("transaction not found [%u:%u]\n",hash_index,label);
+		return rc;
+	}
+
+	LM_DBG("transaction found [%u:%u] => %p\n",hash_index,label,t);
+	rc = was_cancelled(t)?1:-1;
+	t_unref_cell(t);
+
+	return rc;
+}
 
 static int t_was_cancelled(struct sip_msg* msg)
 {
