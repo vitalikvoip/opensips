@@ -56,6 +56,7 @@ struct tm_binds {
 	tislocal_f       t_is_local;
 	tget_ti_f        t_get_trans_ident;
 	tlookup_ident_f  t_lookup_ident;
+	twas_cancelled_ident_f t_was_cancelled_ident;
 	taddblind_f      t_addblind;
 	treply_f         t_reply_unsafe;
 	reqwith_t        t_request_within;
