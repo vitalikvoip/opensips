@@ -28,6 +28,8 @@
 #include "../../parser/msg_parser.h"
 #include "../../parser/parse_uri.h"
 #include "../tm/tm_load.h"
+#include "../../pvar.h"
+#include "../../resolve.h"
 
 enum helper_type {
 	ADDR,
@@ -39,11 +41,18 @@ static void mod_destroy(void);
 static int pv_get_sendsock_helper(struct sip_msg* msg,  pv_param_t* pvp, pv_value_t* val, enum helper_type);
 static int pv_get_sendsock_addr(struct sip_msg* msg,  pv_param_t* pvp, pv_value_t* val);
 static int pv_get_sendsock_addrport(struct sip_msg* msg,  pv_param_t* pvp, pv_value_t* val);
+static int get_route_f(struct sip_msg* m, char *dst, char* route);
+static int fixup_get_route(void **param, int param_no);
 
 static pv_export_t mod_pv[] = {
 	{ {"sendsock_addr",     sizeof("sendsock_addr")-1},     PVT_EXTRA, pv_get_sendsock_addr, 0, 0, 0, 0, 0},
 	{ {"sendsock_addrport", sizeof("sendsock_addrport")-1}, PVT_EXTRA, pv_get_sendsock_addrport, 0, 0, 0, 0, 0},
 	{ {0, 0}, 0, 0, 0, 0, 0, 0, 0 }
+};
+
+static cmd_export_t cmds[] = {
+	{"get_route",  (cmd_function)get_route_f, 2, fixup_get_route, 0, REQUEST_ROUTE|ONREPLY_ROUTE|BRANCH_ROUTE},
+	{0, 0, 0, 0, 0, 0}
 };
 
 /*
@@ -56,7 +65,7 @@ struct module_exports exports = {
 	DEFAULT_DLFLAGS, /* dlopen flags */
 	NULL,            /* load function */
 	NULL,            /* OpenSIPS module dependencies */
-	NULL,            /* Exported functions */
+	cmds,            /* Exported functions */
 	NULL,            /* Exported async functions */
 	NULL,            /* Exported parameters */
 	0,               /* exported statistics */
@@ -163,4 +172,59 @@ static int pv_get_sendsock_addr(struct sip_msg* msg,  pv_param_t* pvp, pv_value_
 static int pv_get_sendsock_addrport(struct sip_msg* msg,  pv_param_t* pvp, pv_value_t* val)
 {
 	return pv_get_sendsock_helper(msg,pvp,val,ADDRPORT);
+}
+
+static int fixup_get_route(void **param, int param_no)
+{
+	return fixup_pvar(param);
+}
+
+static int get_route_f(struct sip_msg* msg, char *_dst, char* _route)
+{
+	pv_value_t dst_val,route_val;
+	str dst;
+	union sockaddr_union dst_su;
+	struct socket_info *send_sock;
+	struct hostent *he;
+	unsigned short port = 5060;
+	int proto = PROTO_UDP;
+
+	if (!_dst || !_route)
+		return -1;
+
+	if (pv_get_spec_value(msg, (pv_spec_p)_dst, &dst_val)) {
+		LM_ERR("failed to get dst PV value!\n");
+		return -1;
+	}
+
+	if ((dst_val.flags & PV_VAL_STR) == 0) {
+		LM_ERR("dst PV vals is not string\n");
+		return -1;
+	}
+
+	dst = dst_val.rs;
+
+	he=sip_resolvehost(&dst, &port, &proto, 0, 0);
+	if (!he) {
+		LM_NOTICE("resolve_host(%.*s) failure\n", dst.len, dst.s);
+		return -1;
+	}
+
+	hostent2su(&dst_su, he, 0, port);
+
+	send_sock = get_send_socket(msg, &dst_su, PROTO_UDP);
+	if (!send_sock) {
+		LM_ERR("get_send_socket() failed\n");
+	}
+
+	route_val.flags = PV_VAL_STR;
+	route_val.rs = send_sock->address_str;
+
+	if (pv_set_value(msg,(pv_spec_p)_route, 0, &route_val) != 0)
+	{
+		LM_ERR("SET route value failed.\n");
+		return -1;
+	}
+
+	return 1;
 }
