@@ -109,10 +109,24 @@ static void ws_conn_clean(struct tcp_connection* c);
 static void wss_report(int type, unsigned long long conn_id, int conn_flags,
 		void *extra, struct peer_endpoint peer);
 static struct mi_root* wss_trace_mi(struct mi_root* cmd, void* param );
-
+static int wss_event_init(void);
 
 static int wss_port = WSS_DEFAULT_PORT;
 
+static event_id_t ei_wss_open_id  = EVI_ERROR;
+static event_id_t ei_wss_close_id  = EVI_ERROR;
+
+static str ei_open_name  = str_init("E_WSS_OPEN");
+static str ei_close_name = str_init("E_WSS_CLOSE");
+
+static str ei_host_name = str_init("peer_host");
+static str ei_port_name = str_init("peer_port");
+static str ei_real_name = str_init("real_host");
+
+static evi_params_p ei_wss_params = NULL;
+static evi_param_p  ei_wss_peerhost_param  = NULL;
+static evi_param_p  ei_wss_peerport_param  = NULL;
+static evi_param_p  ei_wss_real_host_param = NULL;
 
 static cmd_export_t cmds[] = {
 	{"proto_init", (cmd_function)proto_wss_init, 0, 0, 0, 0},
@@ -191,6 +205,52 @@ static int proto_wss_init(struct proto_info *pi)
 	return 0;
 }
 
+static int wss_event_init(void) {
+	int rc = -1;
+
+	do {
+		ei_wss_open_id = evi_publish_event(ei_open_name);
+		if (ei_wss_open_id == EVI_ERROR) {
+			LM_ERR("cannot register wss open event\n");
+			break;
+		}
+
+		ei_wss_close_id = evi_publish_event(ei_close_name);
+		if (ei_wss_close_id == EVI_ERROR) {
+			LM_ERR("cannot register wss close event\n");
+			break;
+		}
+
+		ei_wss_params = pkg_malloc(sizeof(evi_params_t));
+		if (!ei_wss_params) {
+			LM_ERR("no more pkg memory\n");
+			break;
+		}
+		memset(ei_wss_params, 0, sizeof(evi_params_t));
+
+		ei_wss_peerhost_param = evi_param_create(ei_wss_params,&ei_host_name);
+		if (!ei_wss_peerhost_param) {
+			LM_ERR("cannot create wss peer host parameter\n");
+			break;
+		}
+
+		ei_wss_peerport_param = evi_param_create(ei_wss_params,&ei_port_name);
+		if (!ei_wss_peerhost_param) {
+			LM_ERR("cannot create wss peer port parameter\n");
+			break;
+		}
+
+		ei_wss_real_host_param = evi_param_create(ei_wss_params,&ei_real_name);
+		if (!ei_wss_real_host_param) {
+			LM_ERR("cannot create wss_real_host parameter\n");
+			break;
+		}
+
+		rc = 0;
+	} while(0);
+
+	return rc;
+}
 
 static int mod_init(void)
 {
@@ -234,7 +294,10 @@ static int mod_init(void)
 			get_script_route_ID_by_name( trace_filter_route, rlist, RT_NO);
 	}
 
-
+	if (wss_event_init() < 0) {
+		LM_ERR("Failed to init wss event\n");
+		return -1;
+	}
 
 	return 0;
 }
@@ -319,15 +382,52 @@ static void wss_report(int type, unsigned long long conn_id, int conn_flags,
 						void *extra, struct peer_endpoint peer)
 {
 	str s;
+	str  real_host = STR_NULL;
+	str  peer_host = STR_NULL;
+	int  peer_port = 0;
+	char buf[IP_ADDR_MAX_STR_SIZE];
 
 	if (type==TCP_REPORT_CLOSE) {
-		if ( !*trace_is_on || !t_dst || (conn_flags & F_CONN_TRACE_DROPPED) )
-			return;
 		/* grab reason text */
 		if (extra) {
 			s.s = (char*)extra;
 			s.len = strlen (s.s);
 		}
+
+		if (ei_wss_close_id != EVI_ERROR) {
+			do {
+				snprintf(buf,sizeof(buf),"%s",ip_addr2a(&peer.addr));
+				peer_host.s   = buf;
+				peer_host.len = strlen(buf);
+				peer_port     = peer.port;
+
+				LM_DBG("Report for conn_id => %d, peer => %.*s:%d, reason => %.*s",
+						(int)conn_id,peer_host.len,peer_host.s,peer_port,s.len,s.s);
+
+				if (evi_param_set_str(ei_wss_peerhost_param, &peer_host) < 0) {
+					LM_ERR("cannot set wss_peerhost param\n");
+					break;
+				}
+
+				if (evi_param_set_int(ei_wss_peerport_param, &peer_port) < 0) {
+					LM_ERR("cannot set wss_peerport param\n");
+					break;
+				}
+
+				if (evi_param_set_str(ei_wss_real_host_param, &real_host) < 0) {
+					LM_ERR("cannot set wss_real_host_param\n");
+					break;
+				}
+
+				if (evi_raise_event(ei_wss_close_id, ei_wss_params) < 0) {
+					LM_ERR("cannot raise an event %.*s\n", ei_close_name.len, ei_close_name.s);
+					break;
+				}
+			} while(0);
+		}
+
+		if ( !*trace_is_on || !t_dst || (conn_flags & F_CONN_TRACE_DROPPED) )
+			return;
 
 		trace_message_atonce( PROTO_WSS, conn_id, NULL/*src*/, NULL/*dst*/,
 			TRANS_TRACE_CLOSED, TRANS_TRACE_SUCCESS, extra?&s:NULL, t_dst );
@@ -592,8 +692,53 @@ static int wss_read_req(struct tcp_connection* con, int* bytes_read)
 			d->dest  = 0;
 		}
 
-		if (size == 0)
+		if (size == 0) {
+			if (WS_STATE(con) == WS_CON_HANDSHAKE_DONE && ei_wss_open_id != EVI_ERROR) {
+				do {
+					/* prepare peer_port and peer_host*/
+					char addr_buf[IP_ADDR_MAX_STR_SIZE];
+					str  peer_host = {.s = addr_buf, .len = 0};
+					int  peer_port = 0;
+
+					snprintf(addr_buf,sizeof(addr_buf),"%s",ip_addr2a(&con->rcv.src_ip));
+					peer_host.len = strlen(addr_buf);
+					peer_port     = con->rcv.src_port;
+
+					/* prepare real_host */
+					char buf_real_host[100] = {0};
+					str real_host = {.s = buf_real_host, .len = 0};
+					if (d->real_host.s) {
+						memcpy(real_host.s,d->real_host.s,d->real_host.len);
+						real_host.len = d->real_host.len;
+					}
+
+					LM_DBG("WSS_OPEN_EVENT for conn_id => %d, peer => %.*s:%d",
+							con->id,peer_host.len,peer_host.s,peer_port);
+
+					if (evi_param_set_str(ei_wss_peerhost_param, &peer_host) < 0) {
+						LM_ERR("cannot set wss_peerhost param\n");
+						break;
+					}
+
+					if (evi_param_set_int(ei_wss_peerport_param, &peer_port) < 0) {
+						LM_ERR("cannot set wss_peerport param\n");
+						break;
+					}
+
+					if (evi_param_set_str(ei_wss_real_host_param, &real_host) < 0) {
+						LM_ERR("cannot set wss_real_host_param\n");
+						break;
+					}
+
+					if (evi_raise_event(ei_wss_open_id, ei_wss_params) < 0) {
+						LM_ERR("cannot raise an event %.*s\n", ei_open_name.len, ei_open_name.s);
+						break;
+					}
+				} while(0);
+			}
+
 			goto done;
+		}
 	}
 
 	if (WS_STATE(con) == WS_CON_HANDSHAKE_DONE && ws_process(con) < 0)
