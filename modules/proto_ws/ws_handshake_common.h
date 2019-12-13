@@ -577,6 +577,7 @@ static int ws_server_handshake(struct tcp_connection *con)
 
 	LM_DBG("ws_read end\n");
 done:
+
 	/* connection will be released */
 	return size;
 error:
@@ -958,6 +959,26 @@ static int ws_parse_req_handshake(struct tcp_connection *c, char *msg, int len)
 				flags |= WS_PROTO_F;
 			}
 			break;
+		case GET_DWORD('x','-','r','e'):
+				if (hf->name.len == HDR_LEN("X-Real-IP") &&
+						GET_LOWER(hf->name.s + 4) == 'a' &&
+						GET_LOWER(hf->name.s + 5) == 'l' &&
+						GET_LOWER(hf->name.s + 6) == '-' &&
+						GET_LOWER(hf->name.s + 7) == 'i' &&
+						GET_LOWER(hf->name.s + 8) == 'p') {
+
+					LM_DBG("Found X-Real-IP header: %.*s\n", hf->body.len, hf->body.s);
+					str_trim_spaces_lr(hf->body);
+
+					LM_DBG("New Websocket connection mapping {%s:%d} <-> {%.*s}\n",
+						ip_addr2a(&c->rcv.src_ip), c->rcv.src_port, hf->body.len, hf->body.s);
+
+					struct ws_data* d = (struct ws_data*)c->proto_data;
+					if (d) {
+						d->real_host = hf->body;
+					}
+				}
+				break;
 		}
 
 	}
