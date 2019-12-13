@@ -71,6 +71,8 @@ struct ws_data {
 
 	/* WebSocket Handshake key */
 	str key;
+
+	str real_host;
 };
 
 #define WS_STATE(_c) \
