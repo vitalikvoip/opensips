@@ -22,6 +22,7 @@
  */
 
 #include "../../sr_module.h"
+#include "../../mod_fix.h"
 #include "../../str.h"
 #include "../../ut.h"
 #include "../../mem/mem.h"
@@ -188,7 +189,7 @@ static int get_route_f(struct sip_msg* msg, char *_dst, char* _route)
 	struct socket_info *send_sock;
 	struct hostent *he;
 	unsigned short port = 5060;
-	int proto = PROTO_UDP;
+	unsigned short proto = PROTO_UDP;
 
 	if (!_dst || !_route)
 		return -1;
