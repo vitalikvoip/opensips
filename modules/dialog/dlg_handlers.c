@@ -1991,6 +1991,16 @@ regular_indlg_req:
 							unref_dlg( dlg , 1);
 					}
 				}
+
+				str *method = &req->first_line.u.request.method;
+				if (!strncmp(method->s,"INVITE",method->len)) {
+					ref_dlg( dlg, 1);
+					if (d_tmb.register_tmcb(req, 0, TMCB_REQUEST_FWDED, dlg_update_contact_req, (void*)dlg,unreference_dialog) < 0) {
+						LM_ERR("failed to register dlg_update_contact { %p } \n", dlg);
+						unref_dlg(dlg,1);
+					}
+
+				}
 			}
 		}
 	}
