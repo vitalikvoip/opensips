@@ -208,13 +208,13 @@ static int get_route_f(struct sip_msg* msg, char *_dst, char* _route)
 
 	he=sip_resolvehost(&dst, &port, &proto, 0, 0);
 	if (!he) {
-		LM_NOTICE("resolve_host(%.*s) failure\n", dst.len, dst.s);
+		LM_ERR("resolve_host(%.*s) failure\n", dst.len, dst.s);
 		return -1;
 	}
 
 	hostent2su(&dst_su, he, 0, port);
 
-	send_sock = get_send_socket(msg, &dst_su, PROTO_UDP);
+	send_sock=get_out_socket(&dst_su, PROTO_UDP);
 	if (!send_sock) {
 		LM_ERR("get_send_socket() failed\n");
 	}
