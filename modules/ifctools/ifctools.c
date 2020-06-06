@@ -214,7 +214,7 @@ static int get_route_f(struct sip_msg* msg, char *_dst, char* _route)
 
 	hostent2su(&dst_su, he, 0, port);
 
-	send_sock = get_send_socket(msg, &dst_su, PROTO_UDP);
+	send_sock=get_out_socket(&dst_su, PROTO_UDP);
 	if (!send_sock) {
 		LM_ERR("get_send_socket() failed\n");
 	}
