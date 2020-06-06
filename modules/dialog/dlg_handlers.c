@@ -1259,6 +1259,11 @@ static void dlg_update_caller_contact(struct cell* t, int type, struct tmcb_para
 		return;
 	}
 
+	if (msg->msg_flags&FL_SHM_CLONE) {
+		LM_ERR("PKG allocated message expected, t=%p type=%d ps=%p\n", t,type,ps);
+		return;
+	}
+
 	dlg_update_contact(dlg, msg, DLG_CALLER_LEG);
 }
 
@@ -1272,6 +1277,11 @@ static void dlg_update_callee_contact(struct cell* t, int type, struct tmcb_para
 
 	if (!dlg || !msg) {
 		LM_ERR("no request found (%p) or no dialog(%p) provided!\n", msg, dlg);
+		return;
+	}
+
+	if (msg->msg_flags&FL_SHM_CLONE) {
+		LM_ERR("PKG allocated message expected, t=%p type=%d ps=%p\n", t, type, ps);
 		return;
 	}
 
