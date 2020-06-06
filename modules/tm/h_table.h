@@ -374,7 +374,8 @@ struct s_table* get_tm_table( void );
 struct s_table* init_hash_table(unsigned int timer_sets);
 void   free_hash_table( void );
 void   free_cell( struct cell* dead_cell );
-struct cell*  build_cell( struct sip_msg* p_msg, int full_uas );
+struct cell*  build_cell_dbg( struct sip_msg* p_msg, int full_uas, const char *file, unsigned int line, const char *func );
+#define  build_cell(p_msg,full_uas) build_cell_dbg((p_msg),(full_uas),__FILE__,__LINE__,__FUNCTION__)
 void   remove_from_hash_table_unsafe( struct cell * p_cell);
 #ifdef OBSOLETED
 void   insert_into_hash_table( struct cell * p_cell, unsigned int _hash);

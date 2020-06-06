@@ -250,8 +250,12 @@ void run_dlg_callbacks(int type , struct dlg_cell *dlg, struct sip_msg *msg,
 	params.is_active = is_active;
 	params.dlg_data = dlg_data;
 
-	if (dlg->cbs.first==0 || ((dlg->cbs.types)&type)==0 )
+	LM_DBG("%s(): type {%d} dlg {%p} msg {%p} dlg_data {%p}\n", __FUNCTION__, type, dlg, msg, dlg_data);
+
+	if (dlg->cbs.first==0 || ((dlg->cbs.types)&type)==0 ) {
+		LM_DBG("%s(): no callback found for dlg { %p }\n", __FUNCTION__,dlg);
 		return;
+	}
 
 	if (locked)
 		dlg->locked_by = (unsigned short)process_no;

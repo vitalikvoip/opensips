@@ -526,7 +526,7 @@ static int proto_tls_send(struct socket_info* send_sock,
 		if (tcp_no_new_conn) {
 			return -1;
 		}
-		LM_DBG("no open tcp connection found, opening new one\n");
+		LM_INFO("no open tcp connection found, opening new one\n");
 		/* create tcp connection */
 		if ((c=tls_sync_connect(send_sock, to, &fd))==0) {
 			LM_ERR("connect failed\n");

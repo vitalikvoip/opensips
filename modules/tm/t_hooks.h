@@ -245,8 +245,9 @@ int insert_tmcb(struct tmcb_head_list *cb_list, int types,
 void set_extra_tmcb_params(void *extra1, void *extra2);
 
 /* run all transaction callbacks for an event type */
-void run_trans_callbacks( int type , struct cell *trans,
-						struct sip_msg *req, struct sip_msg *rpl, int code );
+void run_trans_callbacks_dbg( int type , struct cell *trans,
+						struct sip_msg *req, struct sip_msg *rpl, int code, const char *file, unsigned int line, const char *func );
+#define run_trans_callbacks(type,trans,req,rpl,code) run_trans_callbacks_dbg((type),(trans),(req),(rpl),(code),__FILE__,__LINE__,__FUNCTION__)
 
 void run_trans_callbacks_locked( int type , struct cell *trans,
 						struct sip_msg *req, struct sip_msg *rpl, int code );

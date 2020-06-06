@@ -98,8 +98,9 @@
 	}while(0)
 
 
-struct sip_msg*  sip_msg_cloner( struct sip_msg *org_msg, int *sip_msg_len,
-		int updatable );
+struct sip_msg*  sip_msg_cloner_dbg( struct sip_msg *org_msg, int *sip_msg_len,
+		int updatable, const char* file, const char* func, unsigned int line );
+#define sip_msg_cloner(org_msg, sip_msg_len, updatable) sip_msg_cloner_dbg((org_msg),(sip_msg_len), (updatable), __FILE__,__FUNCTION__,__LINE__)
 
 
 static inline void clean_msg_clone(struct sip_msg *msg,void *min, void *max)

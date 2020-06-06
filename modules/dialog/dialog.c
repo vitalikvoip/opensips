@@ -1126,6 +1126,8 @@ static int w_match_dialog(struct sip_msg *msg, char *seq_match_mode_gp)
 	gparam_p mm_gp = (gparam_p)seq_match_mode_gp;
 	int mm;
 
+	LM_DBG("%s(): msg {%p}\n", __FUNCTION__, msg);
+
 	if (!seq_match_mode_gp) {
 		mm = SEQ_MATCH_DEFAULT;
 	} else {
@@ -1152,6 +1154,8 @@ static int api_match_dialog(struct sip_msg *msg, int _seq_match_mode)
 	struct sip_uri *r_uri;
 	str s;
 	char *p;
+
+	LM_DBG("%s(): msg {%p}\n", __FUNCTION__, msg);
 
 	/* dialog already found ? */
 	if (get_current_dialog()!=NULL)
@@ -1225,6 +1229,8 @@ static int w_validate_dialog(struct sip_msg *req)
 	struct dlg_cell *dlg;
 	int ret;
 
+	LM_DBG("%s(): starting\n", __FUNCTION__);
+
 	dlg = get_current_dialog();
 	if (dlg==NULL)
 	{
@@ -1232,7 +1238,11 @@ static int w_validate_dialog(struct sip_msg *req)
 		return -4;
 	}
 
+	LM_DBG("%s(): dlg {%p}\n", __FUNCTION__, dlg);
+
 	ret = dlg_validate_dialog(req,dlg);
+
+	LM_DBG("%s(): dlg_validate_dalog(%p, %p) => %d\n", __FUNCTION__, req,dlg,ret);
 
 	if (ret == 0)
 		ret = 1;

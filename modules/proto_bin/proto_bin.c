@@ -25,7 +25,7 @@
  */
 #include <poll.h>
 #include <errno.h>
- #include <unistd.h>
+#include <unistd.h>
 #include <netinet/tcp.h>
 
 #include "../../timer.h"
@@ -156,6 +156,8 @@ static int bin_conn_init(struct tcp_connection* c)
 {
 	struct bin_data *d;
 
+	LM_DBG("%s(): c { %p }\n", __FUNCTION__,c);
+
 	/* allocate the tcp_data and the array of chunks as a single mem chunk */
 	d = (struct bin_data*)shm_malloc( sizeof(struct bin_data) +
 		sizeof(struct bin_send_chunk *) * bin_async_max_postponed_chunks );
@@ -176,6 +178,8 @@ static void bin_conn_clean(struct tcp_connection* c)
 {
 	struct bin_data *d = (struct bin_data*)c->proto_data;
 	int r;
+
+	LM_DBG("%s(): c { %p }\n", __FUNCTION__,c);
 
 	for (r = 0; r < d->async_chunks_no; r++) {
 		shm_free(d->async_chunks[r]);

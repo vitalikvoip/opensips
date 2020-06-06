@@ -129,6 +129,35 @@ void print_ip(char* p, struct ip_addr* ip, char *s)
 	}
 }
 
+void print_ip_info(char* p, struct ip_addr* ip, char *s)
+{
+	switch(ip->af){
+		case AF_INET:
+			LM_DBG("%s%d.%d.%d.%d%s", (p)?p:"",
+								ip->u.addr[0],
+								ip->u.addr[1],
+								ip->u.addr[2],
+								ip->u.addr[3],
+								(s)?s:""
+								);
+			break;
+		case AF_INET6:
+			LM_DBG("%s%x:%x:%x:%x:%x:%x:%x:%x%s", (p)?p:"",
+											htons(ip->u.addr16[0]),
+											htons(ip->u.addr16[1]),
+											htons(ip->u.addr16[2]),
+											htons(ip->u.addr16[3]),
+											htons(ip->u.addr16[4]),
+											htons(ip->u.addr16[5]),
+											htons(ip->u.addr16[6]),
+											htons(ip->u.addr16[7]),
+											(s)?s:""
+				);
+			break;
+		default:
+			LM_DBG("warning unknown address family %d\n", ip->af);
+	}
+}
 
 
 void stdout_print_ip(struct ip_addr* ip)

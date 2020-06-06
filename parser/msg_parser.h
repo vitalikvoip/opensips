@@ -328,13 +328,17 @@ struct sip_msg {
 
 extern int via_cnt;
 
-int parse_msg(char* buf, unsigned int len, struct sip_msg* msg);
+int parse_msg_dbg(char* buf, unsigned int len, struct sip_msg* msg, const char* file, unsigned int line, const char* func);
+#define parse_msg(buf, len, msg) parse_msg_dbg((buf), (len), (msg), __FILE__, __LINE__, __FUNCTION__)
 
-int parse_headers(struct sip_msg* msg, hdr_flags_t flags, int next);
+int parse_headers_dbg(struct sip_msg* msg, hdr_flags_t flags, int next, const char* file, const char* func, unsigned int line);
+#define parse_headers(msg, flags, next) parse_headers_dbg((msg), (flags), (next), __FILE__, __FUNCTION__, __LINE__)
 
 char* get_hdr_field(char* buf, char* end, struct hdr_field* hdr);
 
-void free_sip_msg(struct sip_msg* msg);
+void free_sip_msg_dbg(struct sip_msg* msg, const char* file, const char* func, unsigned int line);
+#define free_sip_msg(msg) free_sip_msg_dbg((msg), __FILE__, __FUNCTION__, __LINE__)
+
 
 int clone_headers(struct sip_msg *from_msg, struct sip_msg *to_msg);
 

@@ -80,7 +80,8 @@ struct cell *get_t();
 
 /* use carefully or better not at all -- current transaction is
  * primarily set by lookup functions */
-void set_t(struct cell *t);
+void set_t_dbg(struct cell *t, const char *file, unsigned int line, const char *func);
+#define set_t(t) set_t_dbg((t), __FILE__,__LINE__,__FUNCTION__)
 
 
 struct cell *get_cancelled_t();

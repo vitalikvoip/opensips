@@ -47,6 +47,11 @@ void empty_tmcb_list(struct tmcb_head_list *head)
 	struct tm_callback *cbp, *cbp_tmp;
 
 	for( cbp=head->first; cbp ; ) {
+
+		LM_DBG("%s(): cbp { %p } types { %d }cbp->callback { %p } cbp->param { %p } cbp->release { %p } cbp->next { %p }\n",
+				__FUNCTION__,
+				cbp,cbp->types,cbp->callback,cbp->param,cbp->release,cbp->next);
+
 		cbp_tmp = cbp;
 		cbp = cbp->next;
 		if (cbp_tmp->release)
@@ -183,13 +188,20 @@ void set_extra_tmcb_params(void *extra1, void *extra2)
 }
 
 
-void run_trans_callbacks( int type , struct cell *trans,
-						struct sip_msg *req, struct sip_msg *rpl, int code )
+void run_trans_callbacks_dbg( int type , struct cell *trans,
+						struct sip_msg *req, struct sip_msg *rpl, int code, const char *file, unsigned int line, const char *func )
 {
 	struct tmcb_params params;
 	struct tm_callback    *cbp;
 	struct usr_avp **backup;
 	struct cell *trans_backup = get_t();
+
+	LM_DBG("%s(): type {%d} trans {%p} req {%p} rpl {%p} code {%d} from (%s:%d %s())\n",
+			__FUNCTION__,
+			type,trans,req,rpl,code,
+			file,line,func);
+
+	LM_DBG("%s(): saving transaction pointer { %p }\n", __FUNCTION__, trans_backup);
 
 	params.req = req;
 	params.rpl = rpl;
@@ -212,6 +224,8 @@ void run_trans_callbacks( int type , struct cell *trans,
 	/* env cleanup */
 	set_avp_list( backup );
 	tmcb_extra1 = tmcb_extra2 = 0;
+
+	LM_DBG("%s(): restoring transaction pointer { %p }\n", __FUNCTION__, trans_backup);
 	set_t(trans_backup);
 }
 

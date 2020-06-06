@@ -121,11 +121,17 @@ void free_cell( struct cell* dead_cell )
 	struct totag_elem *tt, *foo;
 	struct proxy_l *p;
 
-	if ( has_tran_tmcbs( dead_cell, TMCB_TRANS_DELETED) )
-		run_trans_callbacks( TMCB_TRANS_DELETED, dead_cell, 0, 0, 0);
+	LM_DBG("%s(): dead_cell { %p }\n", __FUNCTION__,dead_cell);
 
+	if ( has_tran_tmcbs( dead_cell, TMCB_TRANS_DELETED) ) {
+		LM_DBG("%s(): dead_cell { %p } calling run_trans_callbacks()\n", __FUNCTION__,dead_cell);
+		run_trans_callbacks( TMCB_TRANS_DELETED, dead_cell, 0, 0, 0);
+	}
+
+	LM_DBG("%s(): dead_cell { %p } calling empty_tmcb_list(%p)\n", __FUNCTION__,dead_cell,&dead_cell->tmcb_hl);
 	empty_tmcb_list(&dead_cell->tmcb_hl);
 
+	LM_DBG("%s(): dead_cell { %p } calling context_destroy(%p)\n", __FUNCTION__,dead_cell,context_of(dead_cell));
 	context_destroy(CONTEXT_TRAN, context_of(dead_cell));
 
 	release_cell_lock( dead_cell );
@@ -232,13 +238,17 @@ static inline void init_branches(struct cell *t, unsigned int set)
 }
 
 
-struct cell*  build_cell( struct sip_msg* p_msg, int full_uas)
+struct cell*  build_cell_dbg( struct sip_msg* p_msg, int full_uas, const char *file, unsigned int line, const char *func)
 {
 	struct cell* new_cell;
 	int          sip_msg_len;
 	struct usr_avp **old;
 	struct tm_callback *cbs, *cbs_tmp;
 	unsigned short set;
+
+	LM_DBG("%s(): p_msg {%p} full_uas {%d} from (%s:%u: %s())\n",
+			__FUNCTION__,
+			p_msg, full_uas, file,line,func);
 
 	/* allocs a new cell */
 	new_cell = (struct cell*)shm_malloc(sizeof(struct cell) + context_size(CONTEXT_TRAN));
@@ -314,6 +324,9 @@ struct cell*  build_cell( struct sip_msg* p_msg, int full_uas)
 
 	init_synonym_id(new_cell);
 	init_cell_lock(  new_cell );
+
+	LM_DBG("%s(): returning new_cell { %p }\n", __FUNCTION__,new_cell);
+
 	return new_cell;
 
 error:

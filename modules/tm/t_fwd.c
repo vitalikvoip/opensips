@@ -654,6 +654,7 @@ void cancel_invite(struct sip_msg *cancel_msg,
 	  * to terminate the whole transaction on the spot */
 	if ( (t_invite->nr_of_outgoings-t_invite->first_branch)==1 &&
 	(t_invite->uac[t_invite->first_branch].flags & T_UAC_IS_PHONY) ) {
+		LM_DBG("%s(): got CANCEL with a single PHONY branch, cell {%p}\n", __FUNCTION__, t_invite);
 		relay_reply( t_invite, FAKED_REPLY, t_invite->first_branch,
 			487, &cancel_bitmap);
 	}

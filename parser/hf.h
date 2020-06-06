@@ -215,7 +215,8 @@ static inline int hdr_allocs_parse(struct hdr_field* hdr)
  *
  * \param hf header that should be freed
  */
-void clean_hdr_field(struct hdr_field* hf);
+void clean_hdr_field_dbg(struct hdr_field* hf, const char* file, const char* func, unsigned int line);
+#define clean_hdr_field(hf) clean_hdr_field_dbg((hf), __FILE__, __FUNCTION__, __LINE__)
 
 /**
  * Frees a hdr_field list.

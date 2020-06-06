@@ -53,13 +53,15 @@ extern struct struct_hist_list *con_hist;
 
 
 
-
-static void tcpconn_release(struct tcp_connection* c, long state,int writer)
+#define tcpconn_release(c,state,writer) tcpconn_release_dbg((c),(state),(writer),__FILE__,__LINE__,__FUNCTION__)
+static void tcpconn_release_dbg(struct tcp_connection* c, long state,int writer, const char *file, unsigned int line, const char *func)
 {
 	long response[2];
 
-	LM_DBG(" releasing con %p, state %ld, fd=%d, id=%d\n",
-			c, state, c->fd, c->id);
+	LM_DBG("%s(): releasing con %p, state %ld, writer %d c->fd=%d, c->id=%d c->stat=%d from (%s:%d:%s())\n",
+			__FUNCTION__,
+			c, state, writer, c->fd, c->id, c->state,
+			file,line,func);
 	LM_DBG(" extra_data %p\n", c->extra_data);
 
 	/* if we are in a writer context, do not touch the buffer contain read packets per connection
@@ -89,8 +91,12 @@ static void tcpconn_release(struct tcp_connection* c, long state,int writer)
  * It does the unref and pushes back (if needed) some update to TCP main;
  * right now, it used only from the xxx_send() functions
  */
-void tcp_conn_release(struct tcp_connection* c, int pending_data)
+void tcp_conn_release_dbg(struct tcp_connection* c, int pending_data, const char *file, unsigned int line, const char *func)
 {
+	LM_DBG("%s(): c {%p} pending_data {%d} c->state {%d} c->lifetime {%u} from (%s:%d:%s())\n",
+			__FUNCTION__,
+			c,pending_data, c->state, c->lifetime,
+			file,line,func);
 	if (c->state==S_CONN_BAD) {
 		c->lifetime=0;
 		/* CONN_ERROR will auto-dec refcnt => we must not call tcpconn_put !!*/
@@ -186,9 +192,9 @@ again:
 				con->flags |= F_CONN_INIT;
 			}
 
-			LM_DBG("We have received conn %p with rw %d on fd %d\n",con,rw,s);
+			LM_DBG("%s(): We have received conn %p with rw %d on fd %d\n", __FUNCTION__,con,rw,s);
 			if (rw & IO_WATCH_READ) {
-				LM_DBG("Received con for async read %p ref = %d\n",con,con->refcnt);
+				LM_DBG("%s(): Received con for async read %p ref = %d\n",__FUNCTION__,con,con->refcnt);
 				if (tcpconn_list_find(con, tcp_conn_lst)) {
 					LM_CRIT("duplicate connection received: %p, id %d, fd %d, "
 					        "refcnt %d state %d (n=%d)\n", con, con->id,
@@ -222,7 +228,7 @@ again:
 				/* save FD which is valid in context of this TCP worker */
 				con->fd=s;
 			} else if (rw & IO_WATCH_WRITE) {
-				LM_DBG("Received con for async write %p ref = %d\n",con,con->refcnt);
+				LM_DBG("%s(): Received con for async write %p ref = %d\n",__FUNCTION__,con,con->refcnt);
 				lock_get(&con->write_lock);
 				resp = protos[con->type].net.write( (void*)con, s );
 				lock_release(&con->write_lock);
@@ -231,17 +237,18 @@ again:
 					con->state=S_CONN_BAD;
 					sh_log(con->hist, TCP_SEND2MAIN, "handle write, err, state: %d, att: %d",
 					       con->state, con->msg_attempts);
+					LM_DBG("ASYNC write failed att: %d\n", con->msg_attempts);
 					tcpconn_release_error(con, 1,"Write error");
 					break;
 				} else if (resp==1) {
 					sh_log(con->hist, TCP_SEND2MAIN, "handle write, async, state: %d, att: %d",
 					       con->state, con->msg_attempts);
-					LM_DBG("Asking for ASYNC_WRITE \n");
+					LM_DBG("Asking for ASYNC_WRITE att: %d\n", con->msg_attempts);
 					tcpconn_release(con, ASYNC_WRITE,1);
 				} else {
 					sh_log(con->hist, TCP_SEND2MAIN, "handle write, ok, state: %d, att: %d",
 					       con->state, con->msg_attempts);
-					LM_DBG("Sending CONN_RELEASE_WRITE wrote %d bytes\n", (int)resp);
+					LM_DBG("Sending CONN_RELEASE_WRITE wrote %d bytes, state: %d, att: %d\n", (int)resp, con->state, con->msg_attempts);
 					tcpconn_release(con, CONN_RELEASE_WRITE,1);
 				}
 				ret = 0;
@@ -321,6 +328,8 @@ void tcp_receive_timeout(void)
 			/* S_CONN_BAD or S_CONN_ERROR, remove it */
 			/* fd will be closed in tcpconn_release */
 
+			LM_DBG("%s() con {%p} con->state {%d}\n", __FUNCTION__, con, con->state);
+
 			reactor_del_reader(con->fd, -1/*idx*/, IO_FD_CLOSING/*io_flags*/ );
 			tcpconn_check_del(con);
 			tcpconn_listrm(tcp_conn_lst, con, c_next, c_prev);
@@ -333,6 +342,9 @@ void tcp_receive_timeout(void)
 			continue;
 		}
 		if (con->timeout<=ticks){
+			LM_DBG("%s() con {%p} con->state {%d} con->timeout {%u} ticks {%u}\n",
+					__FUNCTION__, con, con->state, con->timeout, ticks);
+
 			LM_DBG("%p expired - (%d, %d) lt=%d\n",
 					con, con->timeout, ticks,con->lifetime);
 			/* fd will be closed in tcpconn_release */

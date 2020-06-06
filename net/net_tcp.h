@@ -69,7 +69,8 @@ struct mi_root *mi_tcp_list_conns(struct mi_root *cmd, void *param);
 int tcp_init_listener(struct socket_info *si);
 
 /* helper function to set all TCP related options to a socket */
-int tcp_init_sock_opt(int s);
+int tcp_init_sock_opt_dbg(int s, const char *file, unsigned int line, const char *func);
+#define tcp_init_sock_opt(s) tcp_init_sock_opt_dbg((s),__FILE__,__LINE__,__FUNCTION__)
 
 /* blocking connect on a non-blocking socket */
 int tcp_connect_blocking(int s, const struct sockaddr *servaddr,
@@ -82,26 +83,33 @@ int tcp_connect_blocking_timeout(int s, const struct sockaddr *servaddr,
 /********************** TCP conn management functions ************************/
 
 /* returns the connection identified by either the id or the destination to */
-int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
-		struct tcp_connection** conn, int* conn_fd);
+int tcp_conn_get_dbg(int id, struct ip_addr* ip, int port, enum sip_protos proto,
+		struct tcp_connection** conn, int* conn_fd, const char *file, unsigned int line, const char *func);
+
+#define tcp_conn_get(id,ip,port,proto,conn,conn_fd) \
+	tcp_conn_get_dbg((id),(ip),(port),(proto),(conn),(conn_fd), __FILE__,__LINE__,__FUNCTION__)
 
 /* creates a new tcp conn around a newly connected socket
  * and sends it to the master */
-struct tcp_connection* tcp_conn_create(int sock, union sockaddr_union* su,
-		struct socket_info* si, int state);
+struct tcp_connection* tcp_conn_create_dbg(int sock, union sockaddr_union* su,
+		struct socket_info* si, int state, const char *file, unsigned int line, const char  *func);
+#define tcp_conn_create(sock,su,si,state) tcp_conn_create_dbg((sock),(su),(si),(state),__FILE__,__LINE__,__FUNCTION__)
 
 /* creates a new tcp conn around a newly connected socket */
-struct tcp_connection* tcp_conn_new(int sock, union sockaddr_union* su,
-		struct socket_info* si, int state);
+#define tcp_conn_new(sock,su,si,state) tcp_conn_new_dbg((sock),(su),(si),(state),__FILE__,__LINE__,__FUNCTION__)
+struct tcp_connection* tcp_conn_new_dbg(int sock, union sockaddr_union* su,
+		struct socket_info* si, int state, const char *file, unsigned int line, const char *func);
 
 /* sends a connected connection to the master */
 int tcp_conn_send(struct tcp_connection *con);
 
 /* release a connection acquired via tcp_conn_get() or tcp_conn_create() */
-void tcp_conn_release(struct tcp_connection* c, int pending_data);
+#define tcp_conn_release(c,pending_data) tcp_conn_release_dbg((c),(pending_data),__FILE__,__LINE__,__FUNCTION__)
+void tcp_conn_release_dbg(struct tcp_connection* c, int pending_data, const char *file, unsigned int line, const char *func);
 
 /* destroys a connection before sending it to main */
-void tcp_conn_destroy(struct tcp_connection* tcpconn);
+void tcp_conn_destroy_dbg(struct tcp_connection* tcpconn, const char *file, unsigned int line, const char *func);
+#define tcp_conn_destroy(tcpconn) tcp_conn_destroy_dbg((tcpconn), __FILE__,__LINE__,__FUNCTION__)
 
 /* used to tune the connection attributes */
 int tcp_conn_fcntl(struct receive_info *rcv, int attr, void *value);

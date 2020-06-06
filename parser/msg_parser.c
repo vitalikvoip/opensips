@@ -281,7 +281,7 @@ error:
    give you the first occurrence of a header you are interested in,
    look at check_transaction_quadruple
 */
-int parse_headers(struct sip_msg* msg, hdr_flags_t flags, int next)
+int parse_headers_dbg(struct sip_msg* msg, hdr_flags_t flags, int next, const char* file, const char* func, unsigned int line)
 {
 	struct hdr_field *hf;
 	struct hdr_field *itr;
@@ -289,6 +289,8 @@ int parse_headers(struct sip_msg* msg, hdr_flags_t flags, int next)
 	char* rest;
 	char* end;
 	hdr_flags_t orig_flag;
+
+	LM_DBG("%s(): msg {%p} flags {%llu}, next {%d} from (%s:%d %s())\n", __FUNCTION__,msg,flags,next,file,line,func);
 
 #define link_sibling_hdr(_hook, _hdr) \
 	do{ \
@@ -681,7 +683,7 @@ int clone_headers(struct sip_msg *from_msg, struct sip_msg *to_msg)
 
 
 /* returns 0 if ok, -1 for errors */
-int parse_msg(char* buf, unsigned int len, struct sip_msg* msg)
+int parse_msg_dbg(char* buf, unsigned int len, struct sip_msg* msg, const char *file, unsigned int line, const char *func)
 {
 
 	char *tmp;
@@ -689,6 +691,9 @@ int parse_msg(char* buf, unsigned int len, struct sip_msg* msg)
 	struct msg_start *fl;
 	int offset;
 	hdr_flags_t flags;
+
+	LM_DBG("%s(): buf {%p} len {%u} msg {%p} from (%s:%u: %s())\n",
+			__FUNCTION__, buf,len,msg,file,line,func);
 
 	/* eat crlf from the beginning */
 	for (tmp=buf; (*tmp=='\n' || *tmp=='\r')&&
@@ -809,8 +814,10 @@ void free_reply_lump( struct lump_rpl *lump)
 
 /* Free only the content, not the msg structure itself
  * NOTE: the function doesn't do any cleanup/reset of the subfields */
-void free_sip_msg(struct sip_msg* msg)
+void free_sip_msg_dbg(struct sip_msg* msg, const char* file, const char* func, unsigned int line)
 {
+	LM_DBG("%s(): msg {%p} from (%s:%d %s())\n", __FUNCTION__, msg, file,line,func);
+
 	if (msg->msg_cb)
 		msg_callback_process(msg, MSG_DESTROY, NULL);
 	if (msg->new_uri.s)

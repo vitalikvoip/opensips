@@ -104,6 +104,8 @@ error:
 char *build_local(struct cell *Trans,unsigned int branch,
 	str *method, str *extra, struct sip_msg* rpl, unsigned int *len)
 {
+	LM_DBG("%s() method {%.*s}\n", __FUNCTION__, method->len, ZSW(method->s));
+
 	char                *cancel_buf, *p, *via;
 	unsigned int         via_len;
 	struct hdr_field    *buf_hdrs;

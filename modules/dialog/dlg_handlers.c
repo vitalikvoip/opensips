@@ -141,6 +141,8 @@ static inline int add_dlg_rr_param(struct sip_msg *req, unsigned int entry,
 static inline void get_routing_info(struct sip_msg *msg, int is_req,
 							unsigned int *skip_rrs, str *contact, str *rr_set)
 {
+	LM_DBG("%s(): msg {%p}\n", __FUNCTION__, msg);
+
 	/* extract the contact address */
 	if (!msg->contact&&(parse_headers(msg,HDR_CONTACT_F,0)<0||!msg->contact)){
 		//LM_ERR("bad sip message or missing Contact hdr\n");
@@ -1206,16 +1208,34 @@ static inline int dlg_update_contact(struct dlg_cell *dlg, struct sip_msg *msg,
 {
 	str contact;
 	char *tmp;
+
+	int free_contact = 0;
+	int free_contact_parsed = 0;
+
+	LM_DBG("%s() started for dlg {%p} msg {%p} leg {%d}, msg->contact {%p} msg->contact->parsed {%p}\n",
+			__FUNCTION__, dlg, msg, leg, msg->contact, (msg->contact)?msg->contact->parsed:NULL);
+
 	if (!msg->contact &&
 			(parse_headers(msg, HDR_CONTACT_F, 0) < 0 || !msg->contact)) {
-		LM_DBG("INVITE or UPDATE without a contact - not updating!\n");
-		return 0;
-	} else if (!msg->contact->parsed && parse_contact(msg->contact) < 0) {
-		LM_INFO("INVITE or UPDATE with broken contact - not updating!\n");
-		return 0;
+		LM_WARN("INVITE or UPDATE without a contact - not updating!\n");
+		goto error;
+	} else {
+		free_contact++;
+	}
+
+	LM_DBG("%s(): dlg {%p} msg {%p} msg->contact {%p} msg->contact->parsed {%p}\n",
+			__FUNCTION__, dlg, msg, msg->contact, msg->contact->parsed);
+
+	if (!msg->contact->parsed && parse_contact(msg->contact) < 0) {
+		LM_WARN("INVITE or UPDATE with broken contact - not updating!\n");
+		goto error;
+	} else {
+		free_contact_parsed++;
 	}
 
 	contact = ((contact_body_t *)msg->contact->parsed)->contacts->uri;
+	LM_DBG("%s() contact->parsed {%p}, contact => {%.*s}\n", __FUNCTION__, msg->contact->parsed, contact.len, contact.s);
+
 	dlg_lock_dlg(dlg);
 	if (dlg->legs[leg].contact.s) {
 		/* if the same contact, don't do anything */
@@ -1244,12 +1264,17 @@ static inline int dlg_update_contact(struct dlg_cell *dlg, struct sip_msg *msg,
 			contact.len, contact.s, dlg, leg);
 	dlg_unlock_dlg(dlg);
 	return 1;
+
+error:
+	return 0;
 }
 
 static void dlg_update_caller_contact(struct cell* t, int type, struct tmcb_params *ps)
 {
 	struct sip_msg *msg;
 	struct dlg_cell *dlg;
+
+	LM_DBG("%s() cell {%p} type {%d} tmcb_params {%p}\n", __FUNCTION__,t,type,ps);
 
 	dlg = (struct dlg_cell *)(*ps->param);
 	msg = ps->req;
@@ -1272,6 +1297,8 @@ static void dlg_update_callee_contact(struct cell* t, int type, struct tmcb_para
 	struct sip_msg *msg;
 	struct dlg_cell *dlg;
 
+	LM_DBG("%s() cell {%p} type {%d} tmcb_params {%p}\n", __FUNCTION__,t,type,ps);
+
 	dlg = (struct dlg_cell *)(*ps->param);
 	msg = ps->req;
 
@@ -1292,6 +1319,8 @@ static void dlg_update_caller_rpl_contact(struct cell* t, int type, struct tmcb_
 {
 	struct sip_msg *msg;
 	struct dlg_cell *dlg;
+
+	LM_DBG("%s() cell {%p} type {%d} tmcb_params {%p}\n", __FUNCTION__,t,type,ps);
 
 	dlg = (struct dlg_cell *)(*ps->param);
 	msg = ps->rpl;
@@ -1314,6 +1343,8 @@ static void dlg_update_callee_rpl_contact(struct cell* t, int type, struct tmcb_
 {
 	struct sip_msg *msg;
 	struct dlg_cell *dlg;
+
+	LM_DBG("%s() cell {%p} type {%d} tmcb_params {%p}\n", __FUNCTION__,t,type,ps);
 
 	dlg = (struct dlg_cell *)(*ps->param);
 	msg = ps->rpl;
@@ -1566,6 +1597,8 @@ void dlg_onroute(struct sip_msg* req, str *route_params, void *param)
 	str *msg_cseq;
 	char *final_cseq;
 	int is_active = 1;
+
+	LM_DBG("%s(): req {%p} param {%p}\n", __FUNCTION__, req, param);
 
 	/* as this callback is triggered from loose_route, which can be
 	   accidentaly called more than once from script, we need to be sure
@@ -1852,6 +1885,9 @@ after_unlock5:
 				}
 				/* we also need to update the originator's contact after an
 				 * eventual fix_nated_contact */
+				LM_DBG("%s(): setting TMCB_REQUEST_BUILT for dlg {%p} req {%p} method {%.*s} to dlg_update_{caller,callee}_contact\n",
+						__FUNCTION__, dlg, req,
+						 req->first_line.u.request.method.len,  req->first_line.u.request.method.s);
 				ok = 1;
 				if ( d_tmb.register_tmcb( req, 0, TMCB_REQUEST_BUILT,
 				(dir==DLG_DIR_UPSTREAM)?dlg_update_callee_contact:dlg_update_caller_contact,
@@ -1859,6 +1895,10 @@ after_unlock5:
 					LM_ERR("failed to register TMCB (3)\n");
 					ok = 0;
 				}
+
+				LM_DBG("%s(): setting TMCB_RESPONSE_OUT for dlg {%p} req {%p} method {%.*s} to dlg_update_{caller,callee}_rpl_contact\n",
+						__FUNCTION__, dlg, req,
+						 req->first_line.u.request.method.len,  req->first_line.u.request.method.s);
 
 				if (ok) {
 					ref_dlg(dlg, 1);

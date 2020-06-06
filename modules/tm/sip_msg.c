@@ -401,8 +401,8 @@ do { \
  *                              mem chunks, so they can be updated later
  *    2 - msg can be updated, but do not copy updatable part at cloning
  */
-struct sip_msg*  sip_msg_cloner( struct sip_msg *org_msg, int *sip_msg_len,
-																int updatable)
+struct sip_msg*  sip_msg_cloner_dbg( struct sip_msg *org_msg, int *sip_msg_len,
+																int updatable, const char* file, const char* func, unsigned int line)
 {
 	unsigned int      len, l1_len, l2_len, l3_len;
 	struct hdr_field  *hdr,*new_hdr,*last_hdr;
@@ -411,6 +411,10 @@ struct sip_msg*  sip_msg_cloner( struct sip_msg *org_msg, int *sip_msg_len,
 	struct to_param   *to_prm,*new_to_prm;
 	struct sip_msg    *new_msg;
 	char              *p;
+
+	LM_DBG("%s(): org_msg {%p} sip_msg_len{%p} updatable {%d} from (%s:%d %s())\n",  __FUNCTION__,
+			org_msg,sip_msg_len,updatable,
+			file,line,func);
 
 	/*computing the length of entire sip_msg structure*/
 	len = ROUND4(sizeof( struct sip_msg ));
@@ -564,6 +568,7 @@ struct sip_msg*  sip_msg_cloner( struct sip_msg *org_msg, int *sip_msg_len,
 	/* first line, updating the pointers*/
 	if ( org_msg->first_line.type==SIP_REQUEST )
 	{
+		LM_DBG("%s(): SIP_REQUEST %.*s\n", __FUNCTION__,org_msg->first_line.u.request.method.len,org_msg->first_line.u.request.method.s);
 		new_msg->first_line.u.request.method.s =
 			translate_pointer( new_msg->buf , org_msg->buf ,
 			org_msg->first_line.u.request.method.s );
@@ -583,6 +588,7 @@ struct sip_msg*  sip_msg_cloner( struct sip_msg *org_msg, int *sip_msg_len,
 	}
 	else if ( org_msg->first_line.type==SIP_REPLY )
 	{
+		LM_DBG("%s(): SIP_REPLY %.*s\n", __FUNCTION__,new_msg->first_line.u.reply.status.len,new_msg->first_line.u.reply.status.s);
 		new_msg->first_line.u.reply.version.s =
 			translate_pointer( new_msg->buf , org_msg->buf ,
 			org_msg->first_line.u.reply.version.s );
@@ -1094,6 +1100,8 @@ struct sip_msg*  sip_msg_cloner( struct sip_msg *org_msg, int *sip_msg_len,
 		new_msg->body = NULL;
 		break;
 	}
+
+	LM_DBG("%s() returning new_msg {%p}\n", __FUNCTION__, new_msg);
 
 	return new_msg;
 }

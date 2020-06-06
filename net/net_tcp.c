@@ -142,9 +142,16 @@ int last_outgoing_tcp_id = 0;
 /****************************** helper functions *****************************/
 extern void handle_sigs(void);
 
-static inline int init_sock_keepalive(int s)
+#define init_sock_keepalive(s) init_sock_keepalive_dbg((s), __FILE__,__LINE__,__FUNCTION__)
+
+static inline int init_sock_keepalive_dbg(int s, const char* file, unsigned int line, const char* func)
 {
 	int optval;
+
+	LM_DBG("%s(): fd {%d} from (%s:%d: %s())\n",
+			__FUNCTION__,
+			s,
+			file,line,func);
 
 	if (tcp_keepinterval || tcp_keepidle || tcp_keepcount) {
 		tcp_keepalive = 1; /* force on */
@@ -191,10 +198,12 @@ static inline int init_sock_keepalive(int s)
 /*! \brief Set all socket/fd options:  disable nagle, tos lowdelay,
  * non-blocking
  * \return -1 on error */
-int tcp_init_sock_opt(int s)
+int tcp_init_sock_opt_dbg(int s, const char *file, unsigned int line, const char *func)
 {
 	int flags;
 	int optval;
+
+	LM_DBG("%s(): s {%d} from (%s:%d: %s())\n", __FUNCTION__, s, file,line,func);
 
 #ifdef DISABLE_NAGLE
 	flags=1;
@@ -631,8 +640,9 @@ int tcp_get_correlation_id( int id, unsigned long long *cid)
 }
 
 /*! \brief _tcpconn_find with locks and acquire fd */
-int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
-									struct tcp_connection** conn, int* conn_fd)
+int tcp_conn_get_dbg(int id, struct ip_addr* ip, int port, enum sip_protos proto,
+									struct tcp_connection** conn, int* conn_fd,
+									const char *file, unsigned int line, const char *func)
 {
 	struct tcp_connection* c;
 	struct tcp_connection* tmp;
@@ -652,10 +662,14 @@ int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
 		TCPCONN_UNLOCK(part);
 	}
 
+	LM_DBG("%s(): id {%d} ip {%s} port {%d} from (%s:%d: %s())\n",
+			__FUNCTION__,
+			id,(ip)?ip_addr2a(ip):"null",port,file,line,func);
+
 	/* continue search based on IP address + port + transport */
 #ifdef EXTRA_DEBUG
-	LM_DBG("%d  port %d\n",id, port);
-	if (ip) print_ip("tcpconn_find: ip ", ip, "\n");
+	LM_DBG("%s(): %d  port %d\n", __FUNCTION__,id, port);
+	if (ip) print_ip_info("tcpconn_find: ip ", ip, "\n");
 #endif
 	if (ip){
 		hash=tcp_addr_hash(ip, port);
@@ -663,9 +677,10 @@ int tcp_conn_get(int id, struct ip_addr* ip, int port, enum sip_protos proto,
 			TCPCONN_LOCK(part);
 			for (a=TCP_PART(part).tcpconn_aliases_hash[hash]; a; a=a->next) {
 #ifdef EXTRA_DEBUG
-				LM_DBG("a=%p, c=%p, c->id=%d, alias port= %d port=%d\n",
+				LM_DBG("%s(): hash=%u a=%p, c=%p, c->id=%d, alias port= %d, ip=%s port=%d\n",
+					__FUNCTION__, hash,
 					a, a->parent, a->parent->id, a->port,
-					a->parent->rcv.src_port);
+					ip_addr2a(&a->parent->rcv.src_ip),a->parent->rcv.src_port);
 				print_ip("ip=",&a->parent->rcv.src_ip,"\n");
 #endif
 				c = a->parent;
@@ -689,7 +704,7 @@ found:
 	TCPCONN_UNLOCK(part);
 	sh_log(c->hist, TCP_REF, "tcp_conn_get, (%d)", c->refcnt);
 
-	LM_DBG("con found in state %d\n",c->state);
+	LM_DBG("con {%p} found in state %d c->refcnt {%d}\n",c, c->state, c->refcnt);
 
 	if (c->state!=S_CONN_OK || conn_fd==NULL) {
 		/* no need to acquired, just return the conn with an invalid fd */
@@ -735,6 +750,7 @@ found:
 			  tmp, tmp->id, tmp->refcnt, tmp->state, n
 		   );
 		n=-1; /* fail */
+		LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,fd);
 		close(fd);
 		goto error;
 	}
@@ -780,8 +796,8 @@ int tcp_conn_fcntl(struct receive_info *rcv, int attr, void *value)
 	return -1;
 }
 
-
-static struct tcp_connection* tcpconn_add(struct tcp_connection *c)
+#define tcpconn_add(c) tcpconn_add_dbg((c),__FILE__,__LINE__,__FUNCTION__)
+static struct tcp_connection* tcpconn_add_dbg(struct tcp_connection *c, const char *file, unsigned int line, const char *func)
 {
 	unsigned hash;
 
@@ -803,6 +819,19 @@ static struct tcp_connection* tcpconn_add(struct tcp_connection *c)
 		c->aliases++;
 		TCPCONN_UNLOCK(c->id);
 		LM_DBG("hashes: %d, %d\n", hash, c->id_hash);
+
+		char src_ip[IP_ADDR_MAX_STR_SIZE] = {0};
+		char dst_ip[IP_ADDR_MAX_STR_SIZE] = {0};
+		strcpy(src_ip, ip_addr2a(&c->rcv.src_ip));
+		strcpy(dst_ip, ip_addr2a(&c->rcv.dst_ip));
+
+		LM_DBG("%s(): c: %p, id {%d} hashes: %d, %d,"
+				" src: %s:%hu, dst: %s:%hu from (%s:%d: %s())\n",
+				__FUNCTION__,
+				c, c->id, hash, c->id_hash,
+				src_ip, c->rcv.src_port, dst_ip, c->rcv.dst_port,
+				file,line,func);
+
 		return c;
 	}else{
 		LM_CRIT("null connection pointer\n");
@@ -811,9 +840,12 @@ static struct tcp_connection* tcpconn_add(struct tcp_connection *c)
 }
 
 /*! \brief unsafe tcpconn_rm version (nolocks) */
-static void _tcpconn_rm(struct tcp_connection* c)
+#define _tcpconn_rm(c) _tcpconn_rm_dbg((c),__FILE__,__LINE__,__FUNCTION__)
+static void _tcpconn_rm_dbg(struct tcp_connection* c, const char *file, unsigned int line, const char *func)
 {
 	int r;
+
+	LM_DBG("%s(): c: %p, id {%d} hash: %d, from (%s:%d: %s())\n", __FUNCTION__, c, c->id, c->id_hash,file,line,func);
 
 	tcpconn_listrm(TCP_PART(c->id).tcpconn_id_hash[c->id_hash], c,
 		id_next, id_prev);
@@ -827,9 +859,11 @@ static void _tcpconn_rm(struct tcp_connection* c)
 		protos[c->type].net.conn_clean(c);
 
 #ifdef DBG_TCPCON
-	sh_log(c->hist, TCP_DESTROY, "type=%d", c->type);
-	sh_unref(c->hist);
-	c->hist = NULL;
+	if (c->hist) {
+		sh_log(c->hist, TCP_DESTROY, "type=%d", c->type);
+		sh_unref(c->hist);
+		c->hist = NULL;
+	}
 #endif
 
 	shm_free(c);
@@ -1000,10 +1034,13 @@ error0:
  * IMPORTANT - the function assumes you want to create a new TCP conn as
  * a result of a connect operation - the conn will be set as connect !!
  * Accepted connection are triggered internally only */
-struct tcp_connection* tcp_conn_create(int sock, union sockaddr_union* su,
-											struct socket_info* si, int state)
+struct tcp_connection* tcp_conn_create_dbg(int sock, union sockaddr_union* su,
+											struct socket_info* si, int state,
+											const char *file, unsigned int line, const char  *func)
 {
 	struct tcp_connection *c;
+
+	LM_DBG("%s(): sock {%d} state {%d} from (%s:%d: %s())\n", __FUNCTION__, sock, state, file,line,func);
 
 	/* create the connection structure */
 	c = tcp_conn_new(sock, su, si, state);
@@ -1013,8 +1050,8 @@ struct tcp_connection* tcp_conn_create(int sock, union sockaddr_union* su,
 	return (tcp_conn_send(c) == 0 ? c : NULL);
 }
 
-struct tcp_connection* tcp_conn_new(int sock, union sockaddr_union* su,
-		struct socket_info* si, int state)
+struct tcp_connection* tcp_conn_new_dbg(int sock, union sockaddr_union* su,
+		struct socket_info* si, int state, const char *file, unsigned int line, const char *func)
 {
 	struct tcp_connection *c;
 
@@ -1026,7 +1063,9 @@ struct tcp_connection* tcp_conn_new(int sock, union sockaddr_union* su,
 	}
 	c->refcnt++; /* safe to do it w/o locking, it's not yet
 					available to the rest of the world */
-	sh_log(c->hist, TCP_REF, "connect, (%d)", c->refcnt);
+	sh_log(c->hist, TCP_REF, "connect, (%d), id (%d) c (%p)", c->refcnt, c->id, c);
+
+	LM_DBG("%s(): c {%p} sock {%d} state {%d} from (%s:%d: %s)\n", __FUNCTION__, c, sock, state, file,line,func);
 
 	if (protos[c->type].net.conn_init &&
 			protos[c->type].net.conn_init(c) < 0) {
@@ -1058,6 +1097,7 @@ int tcp_conn_send(struct tcp_connection *c)
 			LM_ERR("Failed to send the socket to main for async connection\n");
 			goto error;
 		}
+		LM_DBG("%s:%d() c {%p} closing %d\n", __FUNCTION__,__LINE__,c, fd);
 		close(fd);
 	} else {
 		response[0]=(long)c;
@@ -1078,13 +1118,19 @@ error:
 	return -1;
 }
 
-
-static inline void tcpconn_destroy(struct tcp_connection* tcpconn)
+#define tcpconn_destroy(tcpconn) tcpconn_destroy_dbg((tcpconn), __FILE__, __LINE__, __FUNCTION__)
+static inline void tcpconn_destroy_dbg(struct tcp_connection* tcpconn, const char *file, unsigned int line, const char *func)
 {
 	int fd;
 	int id = tcpconn->id;
 
 	TCPCONN_LOCK(id); /*avoid races w/ tcp_send*/
+
+	LM_DBG("%s(): tcpconn { %p } tcpconn->id { %d } tcpconn->refcnt { %d } fd { %d } from (%s:%d: %s())\n",
+			__FUNCTION__,
+			tcpconn, tcpconn->id, tcpconn->refcnt, tcpconn->s,
+			file,line,func);
+
 	tcpconn->refcnt--;
 	if (tcpconn->refcnt==0){
 		LM_DBG("destroying connection %p, flags %04x\n",
@@ -1094,8 +1140,10 @@ static inline void tcpconn_destroy(struct tcp_connection* tcpconn)
 		 * from the TCP_MAIN reactor when handling connectioned received
 		 * from a worker; and we generate the CLOSE reports from WORKERs */
 		_tcpconn_rm(tcpconn);
-		if (fd >= 0)
+		if (fd >= 0) {
+			LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,fd);
 			close(fd);
+		}
 		tcp_connections_no--;
 	}else{
 		/* force timeout */
@@ -1109,8 +1157,9 @@ static inline void tcpconn_destroy(struct tcp_connection* tcpconn)
 }
 
 /* wrapper to the internally used function */
-void tcp_conn_destroy(struct tcp_connection* tcpconn)
+void tcp_conn_destroy_dbg(struct tcp_connection* tcpconn, const char *file, unsigned int line, const char *func)
 {
+	LM_DBG("%s(): tcpconn { %p } from (%s:%d: %s())\n", __FUNCTION__,tcpconn, file,line,func);
 	tcp_trigger_report(tcpconn, TCP_REPORT_CLOSE,
 				"Closed by Proto layer");
 	sh_log(tcpconn->hist, TCP_UNREF, "tcp_conn_destroy, (%d)", tcpconn->refcnt);
@@ -1148,11 +1197,13 @@ static inline int handle_new_connect(struct socket_info* si)
 	if (tcp_connections_no>=tcp_max_connections){
 		LM_ERR("maximum number of connections exceeded: %d/%d\n",
 					tcp_connections_no, tcp_max_connections);
+		LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,new_sock);
 		close(new_sock);
 		return 1; /* success, because the accept was successful */
 	}
 	if (tcp_init_sock_opt(new_sock)<0){
 		LM_ERR("tcp_init_sock_opt failed\n");
+		LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,new_sock);
 		close(new_sock);
 		return 1; /* success, because the accept was successful */
 	}
@@ -1162,10 +1213,10 @@ static inline int handle_new_connect(struct socket_info* si)
 	if (tcpconn){
 		tcpconn->refcnt++; /* safe, not yet available to the
 							  outside world */
-		sh_log(tcpconn->hist, TCP_REF, "accept, (%d)", tcpconn->refcnt);
+		sh_log(tcpconn->hist, TCP_REF, "accept, (%d) id (%d) c (%p)", tcpconn->refcnt, tcpconn->id, tcpconn);
 		tcpconn_add(tcpconn);
-		LM_DBG("new connection: %p %d flags: %04x\n",
-				tcpconn, tcpconn->s, tcpconn->flags);
+		LM_INFO("new connection: %d %p %d flags: %04x\n",
+				tcpconn->id, tcpconn, tcpconn->s, tcpconn->flags);
 		/* pass it to a child */
 		sh_log(tcpconn->hist, TCP_SEND2CHILD, "accept");
 		if(send2child(tcpconn,IO_WATCH_READ)<0){
@@ -1178,12 +1229,14 @@ static inline int handle_new_connect(struct socket_info* si)
 				/* no close to report here as the connection was not yet
 				 * reported as OPEN by the proto layer...this sucks a bit */
 				_tcpconn_rm(tcpconn);
+				LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,new_sock);
 				close(new_sock/*same as tcpconn->s*/);
 			}else tcpconn->lifetime=0; /* force expire */
 			TCPCONN_UNLOCK(id);
 		}
 	}else{ /*tcpconn==0 */
 		LM_ERR("tcpconn_new failed, closing socket\n");
+		LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,new_sock);
 		close(new_sock);
 	}
 	return 1; /* accept() was successful */
@@ -1211,7 +1264,7 @@ inline static int handle_tcpconn_ev(struct tcp_connection* tcpconn, int fd_i,
 
 	if (event_type == IO_WATCH_READ) {
 		/* pass it to child, so remove it from the io watch list */
-		LM_DBG("data available on %p %d\n", tcpconn, tcpconn->s);
+		LM_DBG("%s(): data available on %p %d\n", __FUNCTION__, tcpconn, tcpconn->s);
 		if (reactor_del_reader(tcpconn->s, fd_i, 0)==-1)
 			return -1;
 		tcpconn->flags|=F_CONN_REMOVED_READ;
@@ -1229,6 +1282,7 @@ inline static int handle_tcpconn_ev(struct tcp_connection* tcpconn, int fd_i,
 				tcp_trigger_report(tcpconn, TCP_REPORT_CLOSE,
 					"No worker for read");
 				_tcpconn_rm(tcpconn);
+				LM_DBG("%s:%d() closing %d\n", __FUNCTION__,__LINE__,fd);
 				close(fd);
 			}else tcpconn->lifetime=0; /* force expire*/
 			TCPCONN_UNLOCK(id);
@@ -1236,7 +1290,7 @@ inline static int handle_tcpconn_ev(struct tcp_connection* tcpconn, int fd_i,
 		return 0; /* we are not interested in possibly queued io events,
 					 the fd was either passed to a child, or closed */
 	} else {
-		LM_DBG("connection %p fd %d is now writable\n", tcpconn, tcpconn->s);
+		LM_DBG("%s(): connection %p fd %d is now writable\n", __FUNCTION__, tcpconn, tcpconn->s);
 		/* we received a write event */
 		if (tcpconn->state==S_CONN_CONNECTING) {
 			/* we're coming from an async connect & write
@@ -1259,7 +1313,7 @@ inline static int handle_tcpconn_ev(struct tcp_connection* tcpconn, int fd_i,
 			/* we successfully connected - further treat this case as if we
 			 * were coming from an async write */
 			tcpconn->state = S_CONN_OK;
-			LM_DBG("Successfully completed previous async connect\n");
+			LM_INFO("Successfully completed previous async connect\n");
 
 			/* now that we completed the async connection, we also need to
 			 * listen for READ events, otherwise these will get lost */
@@ -1292,6 +1346,7 @@ async_write:
 					tcp_trigger_report(tcpconn, TCP_REPORT_CLOSE,
 						"No worker for write");
 					_tcpconn_rm(tcpconn);
+					LM_DBG("%s:%d() closing %d c {%p}\n", __FUNCTION__,__LINE__,fd, tcpconn);
 					close(fd);
 				}else tcpconn->lifetime=0; /* force expire*/
 				TCPCONN_UNLOCK(id);
@@ -1371,6 +1426,11 @@ inline static int handle_tcp_worker(struct tcp_child* tcp_c, int fd_i)
 			response[0], response[1]) ;
 		goto end;
 	}
+
+	LM_DBG("%s() got CMD {%d} connection {%p} state {%d} from child %d (pid %d)\n",
+			__FUNCTION__, cmd, tcpconn, tcpconn->state,
+			(int)(tcp_c-&tcp_children[0]), tcp_c->pid);
+
 	switch(cmd){
 		case CONN_RELEASE:
 			tcp_c->busy--;
@@ -1545,6 +1605,11 @@ inline static int handle_worker(struct process_table* p, int fd_i)
 			"%lx, %lx\n", (int)(p-&pt[0]), p->pid, response[0], response[1]) ;
 		goto end;
 	}
+
+	LM_DBG("%s() got CMD {%d} fd {%d} connection {%p} state {%d} from %d (%d)\n",
+			__FUNCTION__, cmd, fd, tcpconn, tcpconn->state,
+			(int)(p-&pt[0]), p->pid);
+
 	switch(cmd){
 		case CONN_ERROR:
 		case CONN_ERROR2:
@@ -1562,12 +1627,14 @@ inline static int handle_worker(struct process_table* p, int fd_i)
 			/* send the requested FD  */
 			/* WARNING: take care of setting refcnt properly to
 			 * avoid race condition */
+			LM_DBG("%s(): sending fd {%d}back to worker process\n", __FUNCTION__, tcpconn->s);
 			if (send_fd(p->unix_sock, &tcpconn, sizeof(tcpconn),
 							tcpconn->s)<=0){
 				LM_ERR("send_fd failed\n");
 			}
 			break;
 		case CONN_NEW:
+			LM_DBG("%s(): CONN_NEW fd => %d, c => %p\n",__FUNCTION__,fd,tcpconn);
 			/* update the fd in the requested tcpconn*/
 			/* WARNING: take care of setting refcnt properly to
 			 * avoid race condition */
@@ -1582,6 +1649,7 @@ inline static int handle_worker(struct process_table* p, int fd_i)
 			tcpconn->flags&=~F_CONN_REMOVED_READ;
 			break;
 		case ASYNC_CONNECT:
+			LM_DBG("%s(): ASYNC_CONNECT fd => %d, c => %p\n",__FUNCTION__,fd,tcpconn);
 			/* connection is not yet linked to hash = not yet
 			 * available to the outside world */
 			if (fd==-1){
@@ -1597,10 +1665,14 @@ inline static int handle_worker(struct process_table* p, int fd_i)
 			 * while we have stuff to write - otherwise we're going to get
 			 * useless events */
 			reactor_add_writer( tcpconn->s, F_TCPCONN, RCT_PRIO_NET, tcpconn);
+
+			LM_DBG("%s(): ASYNC_CONNECT fd => %d, c => %p flags before {%hu}\n",__FUNCTION__,fd,tcpconn,tcpconn->flags);
 			tcpconn->flags&=~F_CONN_REMOVED_WRITE;
+			LM_DBG("%s(): ASYNC_CONNECT fd => %d, c => %p flags after {%hu}\n",__FUNCTION__,fd,tcpconn,tcpconn->flags);
 			break;
 		case ASYNC_WRITE:
 		case ASYNC_WRITE2:
+			LM_DBG("%s(): ASYNC_WRITE fd => %d, c => %p\n",__FUNCTION__,fd,tcpconn);
 			if (tcpconn->state==S_CONN_BAD){
 				tcpconn->lifetime=0;
 				break;
@@ -1711,8 +1783,8 @@ static inline void __tcpconn_lifetime(int force)
 				next=c->id_next;
 				if (force ||((c->refcnt==0) && (ticks>c->lifetime))) {
 					if (!force)
-						LM_DBG("timeout for hash=%d - %p"
-								" (%d > %d)\n", h, c, ticks, c->lifetime);
+						LM_INFO("timeout for hash=%d - %p"
+								" (%d > %d) fd {%d} flags {%hu}\n", h, c, ticks, c->lifetime, c->s, c->flags);
 					fd=c->s;
 					/* report the closing of the connection . Note that
 					 * there are connectioned that use an foced expire to 0
@@ -1732,10 +1804,15 @@ static inline void __tcpconn_lifetime(int force)
 						} else {
 							LM_BUG("skipped reactor cleaning for c=%p fd=%d\n", c, fd);
 						}
+						LM_DBG("closing fd=%d\n", fd);
 						close(fd);
 					}
 					_tcpconn_rm(c);
 					tcp_connections_no--;
+				} else if ((c->refcnt != 0) && (ticks>c->lifetime)){
+					LM_DBG("%s(): c {%p} fd {%d} lifetime expired but still has refs {%d}\n",
+							__FUNCTION__,
+							c, c->s, c->refcnt);
 				}
 				c=next;
 			}

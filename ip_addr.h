@@ -163,6 +163,7 @@ struct net* mk_net(struct ip_addr* ip, struct ip_addr* mask);
 struct net* mk_net_bitlen(struct ip_addr* ip, unsigned int bitlen);
 
 void print_ip(char* prefix, struct ip_addr* ip, char* suffix);
+void print_ip_info(char* prefix, struct ip_addr* ip, char* suffix);
 void stdout_print_ip(struct ip_addr* ip);
 void print_net(struct net* net);
 

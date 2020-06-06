@@ -68,9 +68,11 @@ static inline int contact_parser(char* _s, int _l, contact_body_t* _c)
 /*
  * Parse contact header field body
  */
-int parse_contact(struct hdr_field* _h)
+int parse_contact_dbg(struct hdr_field* _h, const char* file, const char* func, unsigned int line)
 {
 	contact_body_t* b;
+
+	LM_DBG("%s(): _h {%p} called from (%s:%d %s())\n", __FUNCTION__, _h, file,line,func);
 
 	if (_h->parsed != 0) {
 		return 0;  /* Already parsed */
@@ -93,6 +95,8 @@ int parse_contact(struct hdr_field* _h)
 		return -2;
 	}
 
+	LM_DBG("%s(): b {%p}, b->contact {%p}\n", __FUNCTION__, b, b->contacts);
+
 	_h->parsed = (void*)b;
 	return 0;
 }
@@ -101,8 +105,11 @@ int parse_contact(struct hdr_field* _h)
 /*
  * Free all memory
  */
-void free_contact(contact_body_t** _c)
+void free_contact_dbg(contact_body_t** _c, const char* file, const char* func, unsigned int line)
 {
+	LM_DBG("%s(): _c {%p} *c {%p} (*_c)->contacts {%p} called from (%s:%d %s())\n", __FUNCTION__,_c, *_c, (*_c)->contacts,
+			file,line,func);
+
 	if ((*_c)->contacts) {
 		free_contacts(&((*_c)->contacts));
 	}

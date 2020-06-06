@@ -275,7 +275,8 @@ static inline str* dlg_leg_to_uri(struct dlg_cell *dlg,int leg_no)
 }
 
 void unlink_unsafe_dlg(struct dlg_entry *d_entry, struct dlg_cell *dlg);
-void destroy_dlg(struct dlg_cell *dlg);
+void destroy_dlg_dbg(struct dlg_cell *dlg, const char *file, unsigned int line, const char *func);
+#define destroy_dlg(dlg) destroy_dlg_dbg((dlg),__FILE__,__LINE__,__FUNCTION__)
 
 #ifdef DBG_DIALOG
 #define DBG_REF(dlg, cnt) \
@@ -284,6 +285,7 @@ void destroy_dlg(struct dlg_cell *dlg);
 #define DBG_UNREF(dlg, cnt) \
 	sh_log((dlg)->hist, DLG_UNREF, "h=%d, unref %d with -%d", \
 	       (dlg)->h_entry, (dlg)->ref, (cnt));
+
 #define DBG_FLUSH(dlg) sh_flush((dlg)->hist)
 #else
 #define DBG_REF(dlg, cnt)
@@ -297,7 +299,7 @@ void destroy_dlg(struct dlg_cell *dlg);
 		(_dlg)->ref += (_cnt); \
 	}while(0)
 
-#define unref_dlg_unsafe(_dlg,_cnt,_d_entry)   \
+#define unref_dlg_unsafe_macro(_dlg,_cnt,_d_entry)   \
 	do { \
 		DBG_UNREF(_dlg, _cnt); \
 		(_dlg)->ref -= (_cnt); \
@@ -317,6 +319,15 @@ void destroy_dlg(struct dlg_cell *dlg);
 			destroy_dlg(_dlg);\
 		}\
 	}while(0)
+
+#define unref_dlg_unsafe(dlg,cnt,d_entry) unref_dlg_unsafe_wrapper((dlg),(cnt),(d_entry),__FILE__,__LINE__,__FUNCTION__)
+
+static inline void unref_dlg_unsafe_wrapper(struct dlg_cell *dlg, unsigned int cnt,  struct dlg_entry *d_entry,
+		const char *file, unsigned int line, const char *func)
+{
+	LM_DBG("%s(): dlg {%p} cnt {%d} d_entry {%p} from (%s:%d: %s())\n", __FUNCTION__,dlg,cnt,d_entry, file,line,func);
+	unref_dlg_unsafe_macro( dlg, cnt, d_entry);
+}
 
 /*
  * @input - str
@@ -413,11 +424,11 @@ void link_dlg(struct dlg_cell *dlg, int extra_refs);
 		_link_dlg_unsafe(d_entry, dlg); \
 	} while (0)
 
-void _unref_dlg(struct dlg_cell *dlg, unsigned int cnt);
+void _unref_dlg(struct dlg_cell *dlg, unsigned int cnt,const char *file, unsigned int line, const char *func);
 #define unref_dlg(dlg, cnt) \
 	do { \
 		DBG_UNREF(dlg, cnt); \
-		_unref_dlg(dlg, cnt); \
+		_unref_dlg(dlg, cnt,__FILE__,__LINE__,__FUNCTION__); \
 	} while (0)
 
 void _ref_dlg(struct dlg_cell *dlg, unsigned int cnt);
@@ -443,6 +454,8 @@ static inline int match_dialog(struct dlg_cell *dlg, str *callid,
 			str *ftag, str *ttag, unsigned int *dir, unsigned int *dst_leg) {
 	str *tag;
 	unsigned int i;
+
+	LM_DBG("%s(): dlg {%p} callid {%.*s}\n", __FUNCTION__, dlg, callid->len,callid->s);
 
 	/* first check dialog callid */
 	if (dlg->callid.len!=callid->len ||

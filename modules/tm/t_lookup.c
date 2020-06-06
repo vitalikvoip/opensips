@@ -162,7 +162,10 @@ static str relay_reason_100 = str_init("Giving a try");
 
 
 struct cell *get_t(void) { return T; }
-void set_t(struct cell *t) { T=t; }
+void set_t_dbg(struct cell *t, const char *file, unsigned int line, const char *func) {
+	LM_DBG("%s(): t {%p} from (%s:%d: %s())\n", __FUNCTION__,t,file,line,func);
+	T=t;
+}
 void init_t(void) {set_t(T_UNDEFINED);}
 
 struct cell *get_cancelled_t(void) { return cancelled_T; }
@@ -998,9 +1001,13 @@ static inline void init_new_t(struct cell *new_cell, struct sip_msg *p_msg)
 	new_cell->on_branch=get_on_branch();
 }
 
-static inline int new_t(struct sip_msg *p_msg, int full_uas)
+#define new_t(p_msg,full_uas) new_t_dbg((p_msg),(full_uas), __FILE__,__LINE__,__FUNCTION__)
+static inline int new_t_dbg(struct sip_msg *p_msg, int full_uas, const char *file, unsigned int line, const char *func)
 {
 	struct cell *new_cell;
+
+	LM_DBG("%s: p_msg {%p}, full_uas {%d} from (%s:%d: %s())\n",
+			__FUNCTION__,p_msg, full_uas, file,line,func);
 
 	/* for ACK-dlw-wise matching, we want From-tags */
 	if (p_msg->REQ_METHOD==METHOD_INVITE && parse_from_header(p_msg)<0) {

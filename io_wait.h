@@ -179,12 +179,14 @@ typedef struct io_wait_handler io_wait_h;
 #define unhash_fd_map(pfm,c_flags,sock_flags,erase)	\
 	do{ \
 		if ((c_flags & IO_FD_CLOSING) || pfm->flags == sock_flags) { \
+			LM_DBG("%s:%d() 1:  unhash_fd_map(pfm %p,c_flags %d,sock_flags %d)\n", __FUNCTION__,__LINE__,pfm,c_flags,sock_flags); \
 			(pfm)->type=0 /*F_NONE */; \
 			(pfm)->fd=-1; \
 			(pfm)->flags = 0; \
 			(pfm)->data = NULL; \
 			erase = 1; \
 		} else { \
+			LM_DBG("%s:%d() 2:  unhash_fd_map(pfm %p,c_flags %d,sock_flags %d)\n", __FUNCTION__,__LINE__,pfm,c_flags,sock_flags); \
 			(pfm)->flags &= ~sock_flags; \
 			erase = 0; \
 		} \
@@ -263,10 +265,10 @@ again:
 		int k;\
 		LM_DBG("[%s] size=%d, fd array is",h->name,h->fd_no);\
 		for(k=0;k<h->fd_no;k++) LM_GEN1(L_DBG," %d flags = %d",h->fd_array[k].fd,h->fd_hash[h->fd_array[k].fd].flags);\
-		LM_GEN1(L_DBG,"\n"); \
+		LM_GEN1(L_INFO,"\n"); \
 		LM_DBG("[%s] size=%d, prio array is",h->name,h->max_prio);\
-		for(k=0;k<h->max_prio;k++) LM_GEN1(L_DBG," %d",h->prio_idx[k]);\
-		LM_GEN1(L_DBG,"\n"); \
+		for(k=0;k<h->max_prio;k++) LM_GEN1(L_INFO," %d",h->prio_idx[k]);\
+		LM_GEN1(L_INFO,"\n"); \
 	}while(0)
 
 
@@ -334,13 +336,18 @@ again:
  * functions (it avoids functions calls, the overhead being only an extra
  *  switch())
 */
-inline static int io_watch_add(	io_wait_h* h,
+#define io_watch_add(h,fd,type,data,prio,flags) io_watch_add_dbg((h),(fd),(type),(data),(prio),(flags),__FILE__,__LINE__,__FUNCTION__)
+inline static int io_watch_add_dbg(	io_wait_h* h,
 								int fd,
 								fd_type type,
 								void* data,
 								int prio,
-								int flags)
+								int flags,
+								const char* file, unsigned int line, const char* func)
 {
+
+	LM_DBG("%s(): fd {%d} type {%d} data {%p} flags{%d} from (%s:%d: %s())\n",
+			__FUNCTION__,fd,type,data,flags,file,line,func);
 
 	/* helper macros */
 #define fd_array_setup \
@@ -416,8 +423,12 @@ inline static int io_watch_add(	io_wait_h* h,
 		goto error0;
 	}
 #if defined (HAVE_EPOLL)
-	LM_DBG("[%s] io_watch_add op (%d on %d) (%p, %d, %d, %p,%d), fd_no=%d/%d\n",
-			h->name,fd,h->epfd, h,fd,type,data,flags,h->fd_no,h->max_fd_no);
+	LM_DBG("%s(): [%s] op (%d on %d) (%p, %d, %d, %p,%d), fd_no=%d/%d\n",
+			__FUNCTION__,
+			h->name,
+			fd,h->epfd,
+			h,fd,type,data,flags,
+			h->fd_no,h->max_fd_no);
 #else
 	LM_DBG("[%s] io_watch_add op (%d) (%p, %d, %d, %p,%d), fd_no=%d/%d\n",
 			h->name,fd, h,fd,type,data,flags,h->fd_no,h->max_fd_no);
@@ -426,15 +437,22 @@ inline static int io_watch_add(	io_wait_h* h,
 	/*  hash sanity check */
 	e=get_fd_map(h, fd);
 
+	LM_DBG("%s(): e {%p} e->data {%p} e->fd {%d} e->flags {%d}"
+			"fd {%d} data {%p} flags {%d}\n", __FUNCTION__,
+			e,e->data,e->fd,e->flags,
+			fd,data,flags);
+
 	if (e->flags & flags){
 		if (e->data != data) {
 			LM_BUG("[%s] BUG trying to overwrite entry %d"
 					" in the hash(%d, %d, %p,%d) with (%d, %d, %p,%d)\n",
-					h->name,fd, e->fd, e->type, e->data,e->flags, fd, type, data,flags);
+					h->name, fd,
+					e->fd, e->type, e->data, e->flags,
+					fd, type, data,flags);
 			goto error0;
 		}
-		LM_DBG("[%s] Socket %d is already being listened on for flags %d\n",
-			   h->name,fd,flags);
+		LM_DBG("%s(): [%s] Socket %d conn %p is already being listened on for flags %d\n",
+			   __FUNCTION__,h->name,fd,e->data,flags);
 		return 0;
 	}
 
@@ -609,9 +627,16 @@ error0:
  *                    remove operations (e.g.: epoll, kqueue, sigio)
  * \return 0 if ok, -1 on error
  */
-inline static int io_watch_del(io_wait_h* h, int fd, int idx,
-					int flags,int sock_flags)
+#define io_watch_del(h,fd,idx,flags,sock_flags) io_watch_del_dbg((h),(fd),(idx),(flags),(sock_flags), __FILE__,__LINE__,__FUNCTION__)
+inline static int io_watch_del_dbg(io_wait_h* h, int fd, int idx,
+					int flags,int sock_flags,
+					const char* file, unsigned int line, const char* func)
 {
+	LM_DBG("%s(): fd {%d} idx {%d} flags {%d} sock_flags {%d} from (%s:%d: %s())\n",
+			__FUNCTION__,
+			fd,idx,flags,sock_flags,
+			file,line,func);
+
 #define fix_fd_array \
 	do{\
 			if (idx==-1){ \

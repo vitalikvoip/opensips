@@ -107,7 +107,10 @@ struct dlg_cell *get_current_dialog(void)
 {
 	struct cell *trans;
 
+	LM_DBG("%s(): starting\n", __FUNCTION__);
+
 	if (current_processing_ctx && ctx_dialog_get()) {
+		LM_DBG("%s(): current_processing_ctx { %p } ctx_dialog_get() {%p}\n", __FUNCTION__, current_processing_ctx, ctx_dialog_get());
 		/* use the processing context */
 		return ctx_dialog_get();
 	}
@@ -115,15 +118,24 @@ struct dlg_cell *get_current_dialog(void)
 	trans = d_tmb.t_gett();
 	if (trans==NULL || trans==T_UNDEFINED) {
 		/* no transaction */
+		LM_DBG("%s(): returning NULL\n", __FUNCTION__);
 		return NULL;
 	}
+
+	LM_DBG("%s(): trans { %p }\n", __FUNCTION__, trans);
+
 	if (current_processing_ctx && trans->dialog_ctx) {
 		/* if we have context, but no dlg info, and we 
 		   found dlg info into transaction, populate
 		   the dialog too */
+
+		LM_DBG("%s(): WTF current_processing_ctx { %p } trans->dailog_ctx { %p }\n", __FUNCTION__,current_processing_ctx,trans->dialog_ctx);
+
 		ref_dlg((struct dlg_cell*)trans->dialog_ctx, 1);
 		ctx_dialog_set(trans->dialog_ctx);
 	}
+
+	LM_DBG("%s(): returning {%p}\n", __FUNCTION__, trans->dialog_ctx);
 	return (struct dlg_cell*)trans->dialog_ctx;
 }
 
@@ -243,11 +255,11 @@ static inline void free_dlg_dlg(struct dlg_cell *dlg)
 }
 
 
-void destroy_dlg(struct dlg_cell *dlg)
+void destroy_dlg_dbg(struct dlg_cell *dlg, const char *file, unsigned int line, const char *func)
 {
 	int ret = 0;
 
-	LM_DBG("destroying dialog %p\n",dlg);
+	LM_DBG("%s(): destroying dialog %p from (%s:%d: %s())\n",__FUNCTION__,dlg,file,line,func);
 
 	ret = remove_dlg_timer(&dlg->tl);
 	if (ret < 0) {
@@ -393,6 +405,11 @@ int dlg_update_leg_info(int leg_idx, struct dlg_cell *dlg, str* tag, str *rr,
 		str *contact,str *cseq, struct socket_info *sock,
 		str *mangled_from,str *mangled_to,str *sdp)
 {
+	LM_DBG("%s(): dlg {%p} tag {%.*s} contact {%.*s}\n", __FUNCTION__,
+			dlg,
+			(tag)     ? tag->len     : (int)strlen("null"), (tag)     ? tag->s:"null",
+			(contact) ? contact->len : (int)strlen("null"), (contact) ? contact->s:"null");
+
 	struct dlg_leg *leg;
 	rr_t *head = NULL, *rrp;
 
@@ -855,16 +872,20 @@ void _ref_dlg(struct dlg_cell *dlg, unsigned int cnt)
 
 	d_entry = &(d_table->entries[dlg->h_entry]);
 
+	LM_DBG("%s(): dlg {%p} d_entry {%p} cnt {%d}\n", __FUNCTION__,dlg,d_entry,cnt);
+
 	dlg_lock( d_table, d_entry);
 	ref_dlg_unsafe( dlg, cnt);
 	dlg_unlock( d_table, d_entry);
 }
 
-void _unref_dlg(struct dlg_cell *dlg, unsigned int cnt)
+void _unref_dlg(struct dlg_cell *dlg, unsigned int cnt, const char *file, unsigned int line, const char *func)
 {
 	struct dlg_entry *d_entry;
 
 	d_entry = &(d_table->entries[dlg->h_entry]);
+
+	LM_DBG("%s(): dlg {%p} d_entry {%p} cnt {%d} from (%s:%d: %s())\n", __FUNCTION__,dlg,d_entry,cnt, file,line,func);
 
 	dlg_lock( d_table, d_entry);
 
@@ -1165,8 +1186,8 @@ void next_state_dlg(struct dlg_cell *dlg, int event, int dir, int *old_state,
 		replicate_dialog_deleted(dlg);
 
 
-	LM_DBG("dialog %p changed from state %d to "
-		"state %d, due event %d\n",dlg,*old_state,*new_state,event);
+	LM_DBG("%s(): dialog %p changed from state %d to "
+		"state %d, due event %d\n",__FUNCTION__,dlg,*old_state,*new_state,event);
 }
 
 

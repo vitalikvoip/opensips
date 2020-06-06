@@ -44,13 +44,15 @@ typedef struct contact_body {
 /*
  * Parse contact header field body
  */
-int parse_contact(struct hdr_field* _h);
+int parse_contact_dbg(struct hdr_field* _h, const char* file, const char* func, unsigned int line);
+#define parse_contact(_h) parse_contact_dbg((_h), __FILE__, __FUNCTION__, __LINE__)
 
 
 /*
  * Free all memory
  */
-void free_contact(contact_body_t** _c);
+void free_contact_dbg(contact_body_t** _c, const char* file, const char* func, unsigned int line);
+#define free_contact(_c) free_contact_dbg((_c), __FILE__, __FUNCTION__, __LINE__)
 
 
 /*

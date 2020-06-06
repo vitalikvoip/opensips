@@ -328,6 +328,8 @@ static int tcp_conn_init(struct tcp_connection* c)
 {
 	struct tcp_data *d;
 
+	LM_DBG("%s(): c { %p }\n", __FUNCTION__,c);
+
 	/* allocate the tcp_data and the array of chunks as a single mem chunk */
 	d = (struct tcp_data*)shm_malloc( sizeof(*d) +
 		sizeof(struct tcp_send_chunk *) * tcp_async_max_postponed_chunks );
@@ -350,6 +352,8 @@ static void tcp_conn_clean(struct tcp_connection* c)
 {
 	struct tcp_data *d = (struct tcp_data*)c->proto_data;
 	int r;
+
+	LM_DBG("%s(): c { %p }\n", __FUNCTION__,c);
 
 	for (r=0;r<d->async_chunks_no;r++) {
 		shm_free(d->async_chunks[r]);
@@ -644,6 +648,8 @@ async_connect:
 		LM_ERR("tcp_conn_create failed\n");
 		goto error;
 	}
+	LM_DBG("New connection for async connect {%p}, fd {%d}\n", con, fd);
+
 	/* attach the write buffer to it */
 	lock_get(&con->write_lock);
 	if (add_write_chunk(con,buf,len,0) < 0) {
@@ -662,6 +668,8 @@ local_connect:
 		LM_ERR("tcp_conn_create failed, closing the socket\n");
 		goto error;
 	}
+	LM_DBG("New connection for local connect {%p}, fd {%d}\n", con, fd);
+
 	*c = con;
 	*ret_fd = fd;
 	/* report a local connect */
@@ -870,8 +878,7 @@ static int proto_tcp_send(struct socket_info* send_sock,
 			LM_ERR("Unknown destination - cannot open new tcp connection\n");
 			return -1;
 		}
-		LM_DBG("no open tcp connection found, opening new one, async = %d\n",
-			tcp_async);
+		LM_INFO("no open tcp connection found, opening new one, async = %d\n", tcp_async);
 		/* create tcp connection */
 		if (tcp_async) {
 			n = tcpconn_async_connect(send_sock, to, buf, len, &c, &fd);
@@ -880,10 +887,15 @@ static int proto_tcp_send(struct socket_info* send_sock,
 				get_time_difference(get,tcpthreshold,tcp_timeout_con_get);
 				return -1;
 			}
+
+			char src_ip[IP_ADDR_MAX_STR_SIZE];
+			char dst_ip[IP_ADDR_MAX_STR_SIZE];
+			strncpy(src_ip, ip_addr2a(&c->rcv.src_ip), sizeof(src_ip));
+			strncpy(dst_ip, ip_addr2a(&c->rcv.dst_ip), sizeof(dst_ip));
+
 			/* connect succeeded, we have a connection */
-			LM_INFO( "Successfully connected from interface %s:%d to %s:%d!\n",
-				ip_addr2a( &c->rcv.src_ip ), c->rcv.src_port,
-				ip_addr2a( &c->rcv.dst_ip ), c->rcv.dst_port );
+			LM_INFO( "Connect from interface %s:%d to %s:%d has been started (may still be connecting..)\n",
+				src_ip, c->rcv.src_port, dst_ip, c->rcv.dst_port );
 
 			if (n==0) {
 				/* trace the message */

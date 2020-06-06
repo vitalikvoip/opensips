@@ -56,8 +56,12 @@
  * Frees a hdr_field structure,
  * WARNING: it frees only parsed (and not name.s, body.s)
  */
-void clean_hdr_field(struct hdr_field* hf)
+void clean_hdr_field_dbg(struct hdr_field* hf, const char* file, const char* func, unsigned int line)
 {
+	LM_DBG("%s(): hf {%p} type {%d} from (%s:%d %s()\n", __FUNCTION__,
+			hf, (hf->parsed) ? hf->type : -999,
+			file, line, func);
+
 	if (hf->parsed){
 		switch(hf->type){
 		case HDR_VIA_T:
