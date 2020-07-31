@@ -130,7 +130,7 @@ static inline int uri2su(str *uri, union sockaddr_union *to_su, int proto)
 static inline struct socket_info *uri2sock(struct sip_msg* msg, str *uri,
 									union sockaddr_union *to_su, int proto)
 {
-	struct socket_info* send_sock;
+	struct socket_info* send_sock = NULL;
 
 	if ( (proto=uri2su(uri, to_su, proto))==-1 )
 		return 0;
@@ -144,5 +144,20 @@ static inline struct socket_info *uri2sock(struct sip_msg* msg, str *uri,
 	return send_sock;
 }
 
+static inline struct socket_info *uri2sock2(struct sip_msg* msg, str *uri,
+									union sockaddr_union *to_su, int proto)
+{
+	struct socket_info* send_sock = NULL;
+
+	if ( (proto=uri2su(uri, to_su, proto))==-1 )
+		return 0;
+
+	send_sock = get_out_socket(to_su, proto);
+	if (!send_sock) {
+		LM_ERR("no corresponding socket for af %d\n", to_su->s.sa_family);
+	}
+
+	return send_sock;
+}
 
 #endif /* _TM_UT_H */
