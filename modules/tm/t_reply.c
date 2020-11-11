@@ -573,7 +573,7 @@ static inline int run_failure_handlers(struct cell *t)
 		return 1;
 	}
 
-	if (!fake_req(&faked_req, shmem_msg, &t->uas, uac, 0/*no dst_uri*/)) {
+	if (!fake_req(&faked_req, shmem_msg, &t->uas, NULL)) {
 		LM_ERR("fake_req failed\n");
 		return 0;
 	}
@@ -651,7 +651,7 @@ static inline int do_dns_failover(struct cell *t)
 	if ( get_next_su( uac->proxy, &uac->request.dst.to, 1)!=0 )
 		return -1;
 
-	LM_DBG("new destination available\n");
+	LM_DBG("%s() t {%p} new destination available\n", __FUNCTION__, t);
 
 	if (t->uas.request==NULL) {
 		if (!is_local(t)) {
@@ -683,7 +683,7 @@ static inline int do_dns_failover(struct cell *t)
 	}
 	shmem_msg = t->uas.request;
 
-	if (!fake_req(&faked_req, shmem_msg, &t->uas, uac, 1/*with dst_uri*/)) {
+	if (!fake_req(&faked_req, shmem_msg, &t->uas, uac)) {
 		LM_ERR("fake_req failed\n");
 		return -1;
 	}
