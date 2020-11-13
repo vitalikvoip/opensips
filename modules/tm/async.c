@@ -98,9 +98,10 @@ int t_resume_async(int fd, void *param)
 	}
 
 	if (t_lookup_ident(&t_1,ctx->hash,ctx->label) < 0) {
-		LM_BUG("Attempt to resume transaction which has been already removed: %p\n", t);
+		LM_BUG("[%s:%d] Attempt to resume transaction which has been already removed: %p\n", __FUNCTION__, __LINE__, t);
 	} else {
 		t_unref_cell(t_1);
+		LM_INFO("[%s:%d] resuming valid transaction: %p\n", __FUNCTION__, __LINE__, t);
 	}
 
 	/* prepare for resume route, by filling in a phony UAC structure to
