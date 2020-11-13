@@ -51,6 +51,9 @@ typedef struct _async_tm_ctx {
 	/* e2e ACK */
 	struct cell *e2eack_t;
 
+	/* t hash:label */
+	unsigned int hash;
+	unsigned int label;
 } async_tm_ctx;
 
 extern int return_code; /* from action.c, return code */
@@ -81,6 +84,7 @@ int t_resume_async(int fd, void *param)
 	struct usr_avp **backup_list;
 	struct socket_info* backup_si;
 	struct cell *t= ctx->t;
+	struct cell *t_1 = NULL;
 	int route;
 
 	if (valid_async_fd(fd))
@@ -91,6 +95,12 @@ int t_resume_async(int fd, void *param)
 	if (current_processing_ctx) {
 		LM_CRIT("BUG - a context already set!\n");
 		abort();
+	}
+
+	if (t_lookup_ident(&t_1,ctx->hash,ctx->label) < 0) {
+		LM_BUG("Attempt to resume transaction which has been already removed: %p\n", t);
+	} else {
+		t_unref_cell(t_1);
 	}
 
 	/* prepare for resume route, by filling in a phony UAC structure to
@@ -312,6 +322,8 @@ int t_handle_async(struct sip_msg *msg, struct action* a , int resume_route)
 	ctx->msg_ctx = current_processing_ctx;
 	ctx->t = t;
 	ctx->kr = get_kr();
+	ctx->hash = t->hash_index;
+	ctx->label = t->label;
 
 	ctx->cancelled_t = get_cancelled_t();
 	ctx->e2eack_t = get_e2eack_t();
