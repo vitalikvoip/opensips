@@ -108,6 +108,12 @@
 
 static char *tls_domain_avp = NULL;
 
+static event_id_t   ei_new_session_id    = EVI_ERROR;
+static str          ei_new_session_name  = str_init("E_TLS_NEW_SESSION");
+static str          ei_sslkeylog_name    = str_init("sslkeylog");
+static evi_params_p ei_new_session_params  = NULL;
+static evi_param_p  ei_sslkeylog_param     = NULL;
+
 static int  mod_init(void);
 static int  child_init(int rank);
 static int  mod_load(void);
@@ -118,6 +124,7 @@ static int load_tls_mgm(struct tls_mgm_binds *binds);
 static struct mi_root* tls_reload(struct mi_root *cmd, void *param);
 static struct mi_root * tls_list(struct mi_root *root, void *param);
 static int list_domain(struct mi_node *root, struct tls_domain *d);
+static int new_session_event_init(void);
 
 /* DB handler */
 static db_con_t *db_hdl = 0;
@@ -1127,6 +1134,25 @@ static void destroy_tls_dom(struct tls_domain *d)
 	shm_free(d);
 }
 
+static void ctx_keylog_cb_func(const SSL *ssl, const char *line)
+{
+	if (ei_new_session_id != EVI_ERROR) {
+		do {
+			LM_DBG("New TLS session event (%p)\n", ssl);
+
+			str sslkeylog = {.s = line, .len = strlen(line) };
+
+			if (evi_param_set_str(ei_sslkeylog_param, &sslkeylog) < 0) {
+				LM_ERR("cannot set tcp_peerhost param\n");
+				break;
+			}
+
+			if (evi_raise_event(ei_new_session_id, ei_new_session_params) < 0)
+				LM_ERR("cannot raise an event %.*s\n", ei_new_session_name.len, ei_new_session_name.s);
+		} while(0);
+	}
+}
+
 static int init_tls_dom(struct tls_domain *d)
 {
 	int cert_from_file = 0;
@@ -1286,6 +1312,8 @@ static int init_tls_dom(struct tls_domain *d)
 		SSL_CTX_set_session_cache_mode(d->ctx[i], SSL_SESS_CACHE_OFF );
 		SSL_CTX_set_session_id_context(d->ctx[i], (unsigned char*)OS_SSL_SESS_ID,
 				OS_SSL_SESS_ID_LEN );
+
+		SSL_CTX_set_keylog_callback(d->ctx[i], ctx_keylog_cb_func);
 
 		/*
 		 * load certificate
@@ -1767,7 +1795,6 @@ static int mod_load(void)
 	return 0;
 }
 
-
 static int mod_init(void) {
 	str s;
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
@@ -2014,7 +2041,41 @@ static int mod_init(void) {
 	on_exit(openssl_on_exit, NULL);
 #endif
 
+	if (new_session_event_init() < 0) {
+		LM_ERR("Failed to init new tls session event\n");
+		return -1;
+	}
+
 	return 0;
+}
+
+static int new_session_event_init(void) {
+	int rc = -1;
+
+	do {
+		ei_new_session_id = evi_publish_event(ei_new_session_name);
+		if (ei_new_session_id == EVI_ERROR) {
+			LM_ERR("cannot register tls close event\n");
+			break;
+		}
+
+		ei_new_session_params = pkg_malloc(sizeof(evi_params_t));
+		if (!ei_new_session_params) {
+			LM_ERR("no more pkg memory\n");
+			break;
+		}
+		memset(ei_new_session_params, 0, sizeof(evi_params_t));
+
+		ei_sslkeylog_param = evi_param_create(ei_new_session_params,&ei_sslkeylog_name);
+		if (!ei_sslkeylog_param) {
+			LM_ERR("cannot create tls peer host parameter\n");
+			break;
+		}
+
+		rc = 0;
+	} while(0);
+
+	return rc;
 }
 
 static int child_init(int rank)
