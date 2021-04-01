@@ -260,7 +260,7 @@ static int mod_init(void)
 	}
 
 	if (tls_event_init() < 0) {
-		LM_ERR("Failed to init tcp event\n");
+		LM_ERR("Failed to init tls event\n");
 		return -1;
 	}
 
