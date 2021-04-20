@@ -2055,7 +2055,7 @@ static int new_session_event_init(void) {
 	do {
 		ei_new_session_id = evi_publish_event(ei_new_session_name);
 		if (ei_new_session_id == EVI_ERROR) {
-			LM_ERR("cannot register tls close event\n");
+			LM_ERR("cannot register new tls session event\n");
 			break;
 		}
 
